@@ -1,15 +1,20 @@
 package ru.svoe.tv
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -22,6 +27,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.BasicTextField
@@ -29,9 +35,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
@@ -43,6 +51,8 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -60,21 +70,26 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-private val Bg = Color(0xFF0E1116)
-private val Card = Color(0xFF1B212B)
-private val CardFocus = Color(0xFF252D3A)
-private val Accent = Color(0xFF4DA3FF)
-private val Muted = Color(0xFF8B97A8)
-private val TextColor = Color(0xFFE8EDF4)
+private val Accent = Color(0xFF7DB2FF)
+private val Muted = Color(0xFFA9B4C8)
+private val TextColor = Color(0xFFF2F5FA)
+private val Panel = Color(0xFF1C2233)
+private val Glass = Color(0x22FFFFFF)
+private val GlassFocus = Color(0x55FFFFFF)
 
 data class AppItem(val label: String, val pkg: String, val intent: Intent, val icon: Bitmap?)
 
 class MainActivity : ComponentActivity() {
     val tick = mutableIntStateOf(0)
 
+    private val btPerm = registerForActivityResult(ActivityResultContracts.RequestPermission()) { Sync.start() }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val prefs = Prefs(this)
+        if (Build.VERSION.SDK_INT >= 31 &&
+            checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED
+        ) btPerm.launch(Manifest.permission.BLUETOOTH_CONNECT) else Sync.start()
         setContent { Root(this, prefs) }
     }
 
@@ -102,7 +117,7 @@ fun loadApps(ctx: Context): List<AppItem> {
                 label = it.loadLabel(pm).toString(),
                 pkg = pkg,
                 intent = launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                icon = runCatching { it.loadIcon(pm).toBitmap(160, 160) }.getOrNull(),
+                icon = runCatching { it.loadIcon(pm).toBitmap(192, 192) }.getOrNull(),
             )
         }
         .distinctBy { it.pkg }
@@ -121,6 +136,16 @@ fun move(list: List<String>, pkg: String, d: Int): List<String> {
 
 fun Context.open(intent: Intent) {
     runCatching { startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+}
+
+private fun greeting(now: Date): String {
+    val h = SimpleDateFormat("H", Locale.US).format(now).toInt()
+    return when (h) {
+        in 5..11 -> "Доброе утро"
+        in 12..17 -> "Добрый день"
+        in 18..22 -> "Добрый вечер"
+        else -> "Доброй ночи"
+    }
 }
 
 @Composable
@@ -158,66 +183,150 @@ fun Root(act: MainActivity, prefs: Prefs) {
         "Домашний экран" to Settings.ACTION_HOME_SETTINGS,
     )
 
-    LazyColumn(
-        Modifier.fillMaxSize().background(Bg),
-        contentPadding = PaddingValues(horizontal = 48.dp, vertical = 28.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp),
+    Box(
+        Modifier.fillMaxSize().background(
+            Brush.linearGradient(listOf(Color(0xFF0A0F1F), Color(0xFF1B1242), Color(0xFF0B2A3F)))
+        )
     ) {
-        item {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Label(SimpleDateFormat("HH:mm", Locale("ru")).format(now), 34, FontWeight.Light)
-                Spacer(Modifier.width(24.dp))
-                Label(SimpleDateFormat("d MMMM yyyy", Locale("ru")).format(now), 16, color = Muted)
-                Spacer(Modifier.weight(1f))
-                Label("Своё ТВ", 26, FontWeight.SemiBold)
-                Spacer(Modifier.weight(1f))
+        LazyColumn(
+            Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(horizontal = 56.dp, vertical = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(28.dp),
+        ) {
+            // Шапка
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column {
+                        Label(SimpleDateFormat("HH:mm", Locale("ru")).format(now), 60, FontWeight.Light)
+                        Label(
+                            SimpleDateFormat("EEEE, d MMMM", Locale("ru")).format(now)
+                                .replaceFirstChar { it.uppercase() },
+                            18, color = Muted,
+                        )
+                    }
+                    Spacer(Modifier.weight(1f))
+                    Label(greeting(now), 22, FontWeight.SemiBold)
+                    Spacer(Modifier.weight(1f))
+                    PhoneStatus()
+                }
             }
-        }
 
-        item {
-            Section("Главный экран  (удерживай приложение ниже, чтобы закрепить)") {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(8.dp)) {
-                    if (pinnedApps.isEmpty()) {
-                        item {
-                            FocusCard(300.dp, 124.dp, onClick = {}) {
-                                Label("Пусто. Закрепи приложения из списка «Все приложения»", 15, color = Muted)
+            // Главный экран (закреплённые)
+            item {
+                Section("Главный экран", "удерживай приложение в списке ниже, чтобы закрепить") {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(18.dp), contentPadding = PaddingValues(12.dp)) {
+                        if (pinnedApps.isEmpty()) {
+                            item {
+                                FocusCard(360.dp, 160.dp, onClick = {}) {
+                                    Label("Пока пусто. Удерживай приложение из «Все приложения», чтобы закрепить", 16, color = Muted, center = true)
+                                }
+                            }
+                        }
+                        items(pinnedApps, key = { it.pkg }) { app ->
+                            AppTile(app, big = true, onLaunch = { act.open(app.intent) }, onMenu = { menuApp = app })
+                        }
+                    }
+                }
+            }
+
+            // Календарь с телефона
+            item {
+                Section("Календарь", "события с телефона") {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(18.dp), contentPadding = PaddingValues(12.dp)) {
+                        if (Sync.events.isEmpty()) {
+                            item {
+                                FocusCard(360.dp, 100.dp, onClick = {}) {
+                                    Label(
+                                        if (Sync.connected.value) "Ближайших событий нет"
+                                        else "Подключи телефон по Bluetooth, события появятся здесь",
+                                        15, color = Muted, center = true,
+                                    )
+                                }
+                            }
+                        }
+                        items(Sync.events.toList()) { ev -> EventCard(ev) }
+                    }
+                }
+            }
+
+            // Уведомления с телефона
+            if (Sync.notifs.isNotEmpty()) {
+                item {
+                    Section("Сообщения", "нажми OK, чтобы скрыть") {
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(18.dp), contentPadding = PaddingValues(12.dp)) {
+                            items(Sync.notifs.toList()) { n -> NotifCard(n) { Sync.notifs.remove(n) } }
+                        }
+                    }
+                }
+            }
+
+            // Все приложения
+            item {
+                Section("Все приложения") {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(12.dp)) {
+                        items(apps, key = { it.pkg }) { app ->
+                            AppTile(app, big = false, onLaunch = { act.open(app.intent) }, onMenu = { menuApp = app })
+                        }
+                    }
+                }
+            }
+
+            // IPTV
+            item {
+                Section("Прямой эфир", "IPTV") {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(12.dp)) {
+                        item { FocusCard(170.dp, 90.dp, onClick = { plDialog = true }) { Label("＋ Плейлист", 17) } }
+                        itemsIndexed(channels) { i, ch ->
+                            FocusCard(170.dp, 90.dp, onClick = { playing = i }) {
+                                Label("${i + 1}  ${ch.name}", 15, center = true)
                             }
                         }
                     }
-                    items(pinnedApps, key = { it.pkg }) { app -> AppTile(app, { act.open(app.intent) }, { menuApp = app }) }
                 }
             }
-        }
 
-        item {
-            Section("Все приложения") {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(8.dp)) {
-                    items(apps, key = { it.pkg }) { app -> AppTile(app, { act.open(app.intent) }, { menuApp = app }) }
-                }
-            }
-        }
-
-        item {
-            Section("Прямой эфир • IPTV") {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(8.dp)) {
-                    item {
-                        FocusCard(150.dp, 80.dp, onClick = { plDialog = true }) { Label("＋ Плейлист", 16) }
-                    }
-                    itemsIndexed(channels) { i, ch ->
-                        FocusCard(150.dp, 80.dp, onClick = { playing = i }) { Label("${i + 1}  ${ch.name}", 15) }
+            // Система
+            item {
+                Section("Система") {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(12.dp)) {
+                        items(system) { (title, action) ->
+                            FocusCard(180.dp, 80.dp, onClick = { act.open(Intent(action)) }) { Label(title, 17) }
+                        }
                     }
                 }
             }
         }
 
-        item {
-            Section("Система") {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(8.dp)) {
-                    items(system) { (title, action) ->
-                        FocusCard(170.dp, 80.dp, onClick = { act.open(Intent(action)) }) { Label(title, 16) }
-                    }
+        // Всплывающее уведомление с телефона
+        val t = Sync.toast.value
+        if (t != null) {
+            LaunchedEffect(t) {
+                delay(8000)
+                if (Sync.toast.value === t) Sync.toast.value = null
+            }
+            Box(Modifier.align(Alignment.TopEnd).padding(32.dp)) { NotifCard(t, popup = true) { Sync.toast.value = null } }
+        }
+
+        // Входящий звонок
+        val caller = Sync.call.value
+        if (caller != null) {
+            Box(Modifier.align(Alignment.TopCenter).padding(top = 28.dp)) {
+                Column(
+                    Modifier.background(Color(0xEE12351F), RoundedCornerShape(20.dp))
+                        .border(BorderStroke(2.dp, Color(0xFF4CD27A)), RoundedCornerShape(20.dp))
+                        .padding(horizontal = 36.dp, vertical = 18.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Label("Входящий звонок", 16, color = Color(0xFF9BE8B6))
+                    Label(caller, 30, FontWeight.SemiBold)
                 }
             }
+        }
+
+        // Плеер IPTV
+        playing?.let { start ->
+            BackHandler { playing = null }
+            PlayerScreen(channels, start)
         }
     }
 
@@ -225,10 +334,10 @@ fun Root(act: MainActivity, prefs: Prefs) {
     menuApp?.let { app ->
         Dialog(onDismissRequest = { menuApp = null }) {
             Column(
-                Modifier.background(Card, RoundedCornerShape(16.dp)).padding(20.dp),
+                Modifier.background(Panel, RoundedCornerShape(20.dp)).padding(24.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Label(app.label, 20, FontWeight.SemiBold)
+                Label(app.label, 22, FontWeight.SemiBold)
                 val isPinned = app.pkg in pinned
                 MenuBtn(if (isPinned) "Убрать с главного экрана" else "Закрепить на главном экране", autoFocus = true) {
                     pinned = if (isPinned) pinned - app.pkg else pinned + app.pkg
@@ -257,17 +366,17 @@ fun Root(act: MainActivity, prefs: Prefs) {
         var status by remember { mutableStateOf("") }
         Dialog(onDismissRequest = { plDialog = false }) {
             Column(
-                Modifier.background(Card, RoundedCornerShape(16.dp)).padding(20.dp).widthIn(min = 420.dp),
+                Modifier.background(Panel, RoundedCornerShape(20.dp)).padding(24.dp).widthIn(min = 460.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Label("Ссылка на плейлист (M3U)", 20, FontWeight.SemiBold)
+                Label("Ссылка на плейлист (M3U)", 22, FontWeight.SemiBold)
                 BasicTextField(
                     value = url,
                     onValueChange = { url = it },
                     singleLine = true,
-                    textStyle = TextStyle(color = TextColor, fontSize = 16.sp),
+                    textStyle = TextStyle(color = TextColor, fontSize = 17.sp),
                     cursorBrush = SolidColor(Accent),
-                    modifier = Modifier.fillMaxWidth().background(Bg, RoundedCornerShape(8.dp)).padding(12.dp),
+                    modifier = Modifier.fillMaxWidth().background(Color(0xFF0E1320), RoundedCornerShape(10.dp)).padding(14.dp),
                 )
                 if (status.isNotEmpty()) Label(status, 14, color = Muted)
                 MenuBtn("Загрузить") {
@@ -285,11 +394,42 @@ fun Root(act: MainActivity, prefs: Prefs) {
             }
         }
     }
+}
 
-    // Плеер IPTV
-    playing?.let { start ->
-        BackHandler { playing = null }
-        PlayerScreen(channels, start)
+@Composable
+fun PhoneStatus() {
+    val on = Sync.connected.value
+    Row(
+        Modifier.background(Glass, RoundedCornerShape(50)).padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(10.dp).background(if (on) Color(0xFF4CD27A) else Color(0xFF8A93A6), CircleShape))
+        Spacer(Modifier.width(10.dp))
+        Label(if (on) "Телефон подключён" else "Телефон не подключён", 14, color = if (on) TextColor else Muted)
+    }
+}
+
+@Composable
+fun EventCard(ev: CalEvent) {
+    val time = if (ev.allDay) "Весь день"
+    else SimpleDateFormat("EEE, HH:mm", Locale("ru")).format(Date(ev.start))
+    FocusCard(300.dp, 100.dp, onClick = {}) {
+        Column(Modifier.padding(horizontal = 16.dp), horizontalAlignment = Alignment.Start) {
+            Label(time, 14, color = Accent)
+            Spacer(Modifier.height(4.dp))
+            Label(ev.title.ifBlank { "Без названия" }, 17, FontWeight.SemiBold)
+        }
+    }
+}
+
+@Composable
+fun NotifCard(n: Notif, popup: Boolean = false, onClick: () -> Unit) {
+    FocusCard(if (popup) 400.dp else 340.dp, 112.dp, onClick = onClick) {
+        Column(Modifier.padding(horizontal = 16.dp).fillMaxWidth(), horizontalAlignment = Alignment.Start) {
+            Label(n.app, 13, color = Accent, maxLines = 1)
+            Label(n.title, 17, FontWeight.SemiBold, maxLines = 1)
+            Label(n.text, 14, color = Muted, maxLines = 2)
+        }
     }
 }
 
@@ -331,33 +471,42 @@ fun PlayerScreen(channels: List<Channel>, start: Int) {
             modifier = Modifier.fillMaxSize(),
         )
         if (showName) {
-            Box(Modifier.padding(32.dp).background(Color(0xAA000000), RoundedCornerShape(8.dp)).padding(12.dp)) {
-                Label("${idx + 1}. ${channels[idx].name}", 22, FontWeight.SemiBold)
+            Box(Modifier.padding(32.dp).background(Color(0xAA000000), RoundedCornerShape(10.dp)).padding(14.dp)) {
+                Label("${idx + 1}. ${channels[idx].name}", 24, FontWeight.SemiBold)
             }
         }
     }
 }
 
 @Composable
-fun AppTile(app: AppItem, onLaunch: () -> Unit, onMenu: () -> Unit) {
-    FocusCard(220.dp, 124.dp, onClick = onLaunch, onLongClick = onMenu) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            app.icon?.let { Image(it.asImageBitmap(), null, Modifier.size(56.dp)) }
-            Spacer(Modifier.height(6.dp))
-            Label(app.label, 15, maxLines = 1)
+fun AppTile(app: AppItem, big: Boolean, onLaunch: () -> Unit, onMenu: () -> Unit) {
+    val w = if (big) 200.dp else 150.dp
+    val h = if (big) 164.dp else 130.dp
+    val ic = if (big) 88.dp else 60.dp
+    FocusCard(w, h, onClick = onLaunch, onLongClick = onMenu) {
+        Column(Modifier.padding(horizontal = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            app.icon?.let { Image(it.asImageBitmap(), null, Modifier.size(ic)) }
+            Spacer(Modifier.height(8.dp))
+            Label(app.label, if (big) 17 else 14, maxLines = 1, center = true)
         }
     }
 }
 
 @Composable
 fun MenuBtn(text: String, autoFocus: Boolean = false, onClick: () -> Unit) {
-    FocusCard(320.dp, 52.dp, onClick = onClick, autoFocus = autoFocus) { Label(text, 16, maxLines = 1) }
+    FocusCard(340.dp, 54.dp, onClick = onClick, autoFocus = autoFocus) { Label(text, 17, maxLines = 1) }
 }
 
 @Composable
-fun Section(title: String, content: @Composable () -> Unit) {
+fun Section(title: String, subtitle: String? = null, content: @Composable () -> Unit) {
     Column {
-        Label(title, 18, color = Muted)
+        Row(verticalAlignment = Alignment.Bottom) {
+            Label(title, 24, FontWeight.SemiBold)
+            if (subtitle != null) {
+                Spacer(Modifier.width(12.dp))
+                Label(subtitle, 14, color = Muted)
+            }
+        }
         Spacer(Modifier.height(4.dp))
         content()
     }
@@ -374,23 +523,40 @@ fun FocusCard(
     content: @Composable () -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
-    val s by animateFloatAsState(if (focused) 1.08f else 1f, label = "scale")
+    val s by animateFloatAsState(if (focused) 1.1f else 1f, animationSpec = tween(160), label = "scale")
     val fr = remember { FocusRequester() }
     if (autoFocus) LaunchedEffect(Unit) { runCatching { fr.requestFocus() } }
+    val shape = RoundedCornerShape(18.dp)
     Box(
         Modifier
             .size(w, h)
             .scale(s)
             .focusRequester(fr)
             .onFocusChanged { focused = it.isFocused }
-            .background(if (focused) CardFocus else Card, RoundedCornerShape(12.dp))
-            .border(if (focused) BorderStroke(3.dp, Accent) else BorderStroke(0.dp, Color.Transparent), RoundedCornerShape(12.dp))
+            .shadow(if (focused) 18.dp else 0.dp, shape, ambientColor = Accent, spotColor = Accent)
+            .background(if (focused) GlassFocus else Glass, shape)
+            .border(if (focused) BorderStroke(2.dp, Color.White) else BorderStroke(1.dp, Glass), shape)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick),
         contentAlignment = Alignment.Center,
     ) { content() }
 }
 
 @Composable
-fun Label(text: String, size: Int, weight: FontWeight = FontWeight.Medium, color: Color = TextColor, maxLines: Int = 2) {
-    BasicText(text, style = TextStyle(color = color, fontSize = size.sp, fontWeight = weight), maxLines = maxLines)
+fun Label(
+    text: String,
+    size: Int,
+    weight: FontWeight = FontWeight.Medium,
+    color: Color = TextColor,
+    maxLines: Int = 2,
+    center: Boolean = false,
+) {
+    BasicText(
+        text,
+        style = TextStyle(
+            color = color, fontSize = size.sp, fontWeight = weight,
+            textAlign = if (center) TextAlign.Center else TextAlign.Start,
+        ),
+        maxLines = maxLines,
+        overflow = TextOverflow.Ellipsis,
+    )
 }
