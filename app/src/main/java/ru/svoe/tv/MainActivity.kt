@@ -2,8 +2,8 @@ package ru.svoe.tv
 
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
@@ -11,28 +11,51 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
 import androidx.core.graphics.drawable.toBitmap
+import androidx.media3.common.MediaItem
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.PlayerView
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -45,15 +68,19 @@ private val Muted = Color(0xFF8B97A8)
 private val TextColor = Color(0xFFE8EDF4)
 
 data class AppItem(val label: String, val pkg: String, val intent: Intent, val icon: Bitmap?)
-data class Tile(val title: String, val onClick: () -> Unit)
 
 class MainActivity : ComponentActivity() {
+    val tick = mutableIntStateOf(0)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent {
-            BackHandler { /* лаунчер: Назад ничего не делает */ }
-            Home(loadApps(this), this)
-        }
+        val prefs = Prefs(this)
+        setContent { Root(this, prefs) }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        tick.intValue++ // обновить список приложений после установки/удаления
     }
 }
 
@@ -78,68 +105,253 @@ fun loadApps(ctx: Context): List<AppItem> {
                 icon = runCatching { it.loadIcon(pm).toBitmap(160, 160) }.getOrNull(),
             )
         }
+        .distinctBy { it.pkg }
         .sortedBy { it.label.lowercase() }
 }
 
-@Composable
-fun Home(apps: List<AppItem>, ctx: Context) {
-    var now by remember { mutableStateOf(Date()) }
-    LaunchedEffect(Unit) { while (true) { now = Date(); delay(10_000) } }
+fun move(list: List<String>, pkg: String, d: Int): List<String> {
+    val i = list.indexOf(pkg)
+    val j = i + d
+    if (i < 0 || j < 0 || j >= list.size) return list
+    val m = list.toMutableList()
+    m.removeAt(i)
+    m.add(j, pkg)
+    return m
+}
 
-    val channels = listOf("Первый", "Россия 1", "СТС", "Карусель", "5 канал", "Канал 6", "Канал 7", "Канал 8")
+fun Context.open(intent: Intent) {
+    runCatching { startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+}
+
+@Composable
+fun Root(act: MainActivity, prefs: Prefs) {
+    val scope = rememberCoroutineScope()
+    var apps by remember { mutableStateOf(emptyList<AppItem>()) }
+    val tick = act.tick.intValue
+    LaunchedEffect(tick) { apps = withContext(Dispatchers.Default) { loadApps(act) } }
+
+    var pinned by remember { mutableStateOf(prefs.pinned) }
+    var channels by remember { mutableStateOf(emptyList<Channel>()) }
+    var playing by remember { mutableStateOf<Int?>(null) }
+    var menuApp by remember { mutableStateOf<AppItem?>(null) }
+    var plDialog by remember { mutableStateOf(false) }
+    var now by remember { mutableStateOf(Date()) }
+
+    LaunchedEffect(Unit) { while (true) { now = Date(); delay(10_000) } }
+    LaunchedEffect(Unit) {
+        channels = Playlist.readCached(act)
+        val url = prefs.playlistUrl
+        if (url.isNotBlank()) runCatching { channels = Playlist.download(act, url) }
+    }
+
+    BackHandler { /* на главном экране «Назад» ничего не делает */ }
+
+    val pinnedApps = pinned.mapNotNull { p -> apps.find { it.pkg == p } }
+
     val system = listOf(
-        Tile("Настройки") { ctx.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) },
-        Tile("Wi-Fi") { ctx.startActivity(Intent(Settings.ACTION_WIFI_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) },
-        Tile("Bluetooth") { ctx.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) },
-        Tile("Экран") { ctx.startActivity(Intent(Settings.ACTION_DISPLAY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) },
-        Tile("Приложения") { ctx.startActivity(Intent(Settings.ACTION_APPLICATION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) },
+        "Настройки" to Settings.ACTION_SETTINGS,
+        "Wi-Fi" to Settings.ACTION_WIFI_SETTINGS,
+        "Bluetooth" to Settings.ACTION_BLUETOOTH_SETTINGS,
+        "Экран" to Settings.ACTION_DISPLAY_SETTINGS,
+        "Звук" to Settings.ACTION_SOUND_SETTINGS,
+        "Приложения" to Settings.ACTION_APPLICATION_SETTINGS,
+        "Домашний экран" to Settings.ACTION_HOME_SETTINGS,
     )
 
-    Column(
-        Modifier.fillMaxSize().background(Bg).padding(horizontal = 48.dp, vertical = 28.dp),
+    LazyColumn(
+        Modifier.fillMaxSize().background(Bg),
+        contentPadding = PaddingValues(horizontal = 48.dp, vertical = 28.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Label(SimpleDateFormat("HH:mm", Locale("ru")).format(now), 34, FontWeight.Light)
-            Spacer(Modifier.width(24.dp))
-            Label(SimpleDateFormat("d MMMM yyyy", Locale("ru")).format(now), 16, color = Muted)
-            Spacer(Modifier.weight(1f))
-            Label("Своё ТВ", 26, FontWeight.SemiBold)
-            Spacer(Modifier.weight(1f))
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Label(SimpleDateFormat("HH:mm", Locale("ru")).format(now), 34, FontWeight.Light)
+                Spacer(Modifier.width(24.dp))
+                Label(SimpleDateFormat("d MMMM yyyy", Locale("ru")).format(now), 16, color = Muted)
+                Spacer(Modifier.weight(1f))
+                Label("Своё ТВ", 26, FontWeight.SemiBold)
+                Spacer(Modifier.weight(1f))
+            }
         }
 
-        Section("Приложения") {
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(8.dp)) {
-                itemsIndexed(apps) { _, app ->
-                    FocusCard(220.dp, 124.dp, { ctx.startActivity(app.intent) }) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            app.icon?.let { Image(it.asImageBitmap(), null, Modifier.size(56.dp)) }
-                            Spacer(Modifier.height(6.dp))
-                            Label(app.label, 15, maxLines = 1)
+        item {
+            Section("Главный экран  (удерживай приложение ниже, чтобы закрепить)") {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(8.dp)) {
+                    if (pinnedApps.isEmpty()) {
+                        item {
+                            FocusCard(300.dp, 124.dp, onClick = {}) {
+                                Label("Пусто. Закрепи приложения из списка «Все приложения»", 15, color = Muted)
+                            }
                         }
                     }
+                    items(pinnedApps, key = { it.pkg }) { app -> AppTile(app, { act.open(app.intent) }, { menuApp = app }) }
                 }
             }
         }
 
-        Section("Прямой эфир • IPTV") {
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(8.dp)) {
-                itemsIndexed(channels) { i, name ->
-                    FocusCard(150.dp, 80.dp, { /* TODO: плеер IPTV */ }) {
-                        Label("${i + 1}  $name", 16)
+        item {
+            Section("Все приложения") {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(8.dp)) {
+                    items(apps, key = { it.pkg }) { app -> AppTile(app, { act.open(app.intent) }, { menuApp = app }) }
+                }
+            }
+        }
+
+        item {
+            Section("Прямой эфир • IPTV") {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(8.dp)) {
+                    item {
+                        FocusCard(150.dp, 80.dp, onClick = { plDialog = true }) { Label("＋ Плейлист", 16) }
+                    }
+                    itemsIndexed(channels) { i, ch ->
+                        FocusCard(150.dp, 80.dp, onClick = { playing = i }) { Label("${i + 1}  ${ch.name}", 15) }
                     }
                 }
             }
         }
 
-        Section("Система") {
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(8.dp)) {
-                itemsIndexed(system) { _, t ->
-                    FocusCard(170.dp, 80.dp, t.onClick) { Label(t.title, 16) }
+        item {
+            Section("Система") {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(8.dp)) {
+                    items(system) { (title, action) ->
+                        FocusCard(170.dp, 80.dp, onClick = { act.open(Intent(action)) }) { Label(title, 16) }
+                    }
                 }
             }
         }
     }
+
+    // Меню приложения (долгое нажатие)
+    menuApp?.let { app ->
+        Dialog(onDismissRequest = { menuApp = null }) {
+            Column(
+                Modifier.background(Card, RoundedCornerShape(16.dp)).padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Label(app.label, 20, FontWeight.SemiBold)
+                val isPinned = app.pkg in pinned
+                MenuBtn(if (isPinned) "Убрать с главного экрана" else "Закрепить на главном экране", autoFocus = true) {
+                    pinned = if (isPinned) pinned - app.pkg else pinned + app.pkg
+                    prefs.pinned = pinned
+                    menuApp = null
+                }
+                if (isPinned) {
+                    MenuBtn("Сдвинуть влево") { pinned = move(pinned, app.pkg, -1); prefs.pinned = pinned }
+                    MenuBtn("Сдвинуть вправо") { pinned = move(pinned, app.pkg, 1); prefs.pinned = pinned }
+                }
+                MenuBtn("О приложении") {
+                    act.open(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${app.pkg}")))
+                    menuApp = null
+                }
+                MenuBtn("Удалить") {
+                    act.open(Intent(Intent.ACTION_DELETE, Uri.parse("package:${app.pkg}")))
+                    menuApp = null
+                }
+            }
+        }
+    }
+
+    // Диалог плейлиста
+    if (plDialog) {
+        var url by remember { mutableStateOf(prefs.playlistUrl) }
+        var status by remember { mutableStateOf("") }
+        Dialog(onDismissRequest = { plDialog = false }) {
+            Column(
+                Modifier.background(Card, RoundedCornerShape(16.dp)).padding(20.dp).widthIn(min = 420.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Label("Ссылка на плейлист (M3U)", 20, FontWeight.SemiBold)
+                BasicTextField(
+                    value = url,
+                    onValueChange = { url = it },
+                    singleLine = true,
+                    textStyle = TextStyle(color = TextColor, fontSize = 16.sp),
+                    cursorBrush = SolidColor(Accent),
+                    modifier = Modifier.fillMaxWidth().background(Bg, RoundedCornerShape(8.dp)).padding(12.dp),
+                )
+                if (status.isNotEmpty()) Label(status, 14, color = Muted)
+                MenuBtn("Загрузить") {
+                    status = "Загрузка…"
+                    scope.launch {
+                        runCatching { Playlist.download(act, url.trim()) }
+                            .onSuccess {
+                                if (it.isEmpty()) status = "В плейлисте нет каналов"
+                                else { channels = it; prefs.playlistUrl = url.trim(); plDialog = false }
+                            }
+                            .onFailure { status = "Ошибка: ${it.message}" }
+                    }
+                }
+                MenuBtn("Отмена") { plDialog = false }
+            }
+        }
+    }
+
+    // Плеер IPTV
+    playing?.let { start ->
+        BackHandler { playing = null }
+        PlayerScreen(channels, start)
+    }
+}
+
+@Composable
+fun PlayerScreen(channels: List<Channel>, start: Int) {
+    val ctx = LocalContext.current
+    var idx by remember { mutableIntStateOf(start) }
+    var showName by remember { mutableStateOf(true) }
+    val player = remember { ExoPlayer.Builder(ctx).build() }
+    DisposableEffect(Unit) { onDispose { player.release() } }
+
+    LaunchedEffect(idx) {
+        player.setMediaItem(MediaItem.fromUri(channels[idx].url))
+        player.prepare()
+        player.playWhenReady = true
+        showName = true
+        delay(3000)
+        showName = false
+    }
+
+    val fr = remember { FocusRequester() }
+    LaunchedEffect(Unit) { fr.requestFocus() }
+
+    Box(
+        Modifier.fillMaxSize().background(Color.Black)
+            .focusRequester(fr)
+            .focusable()
+            .onPreviewKeyEvent { e ->
+                if (e.type != KeyEventType.KeyDown) false
+                else when (e.key) {
+                    Key.DirectionUp, Key.ChannelUp -> { idx = (idx + 1) % channels.size; true }
+                    Key.DirectionDown, Key.ChannelDown -> { idx = (idx - 1 + channels.size) % channels.size; true }
+                    else -> false
+                }
+            },
+    ) {
+        AndroidView(
+            factory = { c -> PlayerView(c).apply { useController = false; this.player = player } },
+            modifier = Modifier.fillMaxSize(),
+        )
+        if (showName) {
+            Box(Modifier.padding(32.dp).background(Color(0xAA000000), RoundedCornerShape(8.dp)).padding(12.dp)) {
+                Label("${idx + 1}. ${channels[idx].name}", 22, FontWeight.SemiBold)
+            }
+        }
+    }
+}
+
+@Composable
+fun AppTile(app: AppItem, onLaunch: () -> Unit, onMenu: () -> Unit) {
+    FocusCard(220.dp, 124.dp, onClick = onLaunch, onLongClick = onMenu) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            app.icon?.let { Image(it.asImageBitmap(), null, Modifier.size(56.dp)) }
+            Spacer(Modifier.height(6.dp))
+            Label(app.label, 15, maxLines = 1)
+        }
+    }
+}
+
+@Composable
+fun MenuBtn(text: String, autoFocus: Boolean = false, onClick: () -> Unit) {
+    FocusCard(320.dp, 52.dp, onClick = onClick, autoFocus = autoFocus) { Label(text, 16, maxLines = 1) }
 }
 
 @Composable
@@ -151,18 +363,29 @@ fun Section(title: String, content: @Composable () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun FocusCard(w: androidx.compose.ui.unit.Dp, h: androidx.compose.ui.unit.Dp, onClick: () -> Unit, content: @Composable () -> Unit) {
+fun FocusCard(
+    w: Dp,
+    h: Dp,
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
+    autoFocus: Boolean = false,
+    content: @Composable () -> Unit,
+) {
     var focused by remember { mutableStateOf(false) }
     val s by animateFloatAsState(if (focused) 1.08f else 1f, label = "scale")
+    val fr = remember { FocusRequester() }
+    if (autoFocus) LaunchedEffect(Unit) { runCatching { fr.requestFocus() } }
     Box(
         Modifier
             .size(w, h)
             .scale(s)
+            .focusRequester(fr)
             .onFocusChanged { focused = it.isFocused }
             .background(if (focused) CardFocus else Card, RoundedCornerShape(12.dp))
             .border(if (focused) BorderStroke(3.dp, Accent) else BorderStroke(0.dp, Color.Transparent), RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick),
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
         contentAlignment = Alignment.Center,
     ) { content() }
 }
