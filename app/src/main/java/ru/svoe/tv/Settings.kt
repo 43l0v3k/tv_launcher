@@ -151,7 +151,7 @@ fun SettingsScreen(
                                             Label(tr("pair_download"), 12, color = Muted, maxLines = 1)
                                         }
                                         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(d(6))) {
-                                            QrImage("svoetv://pair?code=$code", Modifier.size(d(110)))
+                                            QrImage(prefs.pairLink(), Modifier.size(d(110)))
                                             Label(tr("pair_link"), 12, color = Muted, maxLines = 1)
                                         }
                                     }

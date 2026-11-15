@@ -189,7 +189,7 @@ fun Onboarding(prefs: Prefs, onFinish: () -> Unit) {
                                             Label(tr("pair_download"), 13, color = Muted, maxLines = 1)
                                         }
                                         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(d(6))) {
-                                            QrImage("svoetv://pair?code=$code", Modifier.size(d(124)))
+                                            QrImage(prefs.pairLink(), Modifier.size(d(124)))
                                             Label(tr("pair_link"), 13, color = Muted, maxLines = 1)
                                         }
                                     }

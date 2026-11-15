@@ -177,7 +177,13 @@ fun Home(act: MainActivity, prefs: Prefs) {
                                 ) { f -> if (f) focusedPin = t.id else if (focusedPin == t.id) focusedPin = null }
                             }
                             item(key = "add") {
-                                GlassCard(Modifier.size(d(70)).enter(9), onClick = { overlay = "apps" }) { Ico("plus", d(28)) }
+                                GlassCard(Modifier.size(d(78)).enter(9), onClick = { overlay = "apps" }) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                                        Ico("grid", d(28))
+                                        Spacer(Modifier.height(d(4)))
+                                        Label(tr("all_label"), 11, maxLines = 1)
+                                    }
+                                }
                             }
                         }
 

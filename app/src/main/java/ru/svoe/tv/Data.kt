@@ -47,6 +47,10 @@ class Prefs(ctx: Context) {
         get() = p.getString("wallpaper", "auto") ?: "auto"
         set(v) { p.edit().putString("wallpaper", v).apply() }
 
+    fun pairLink(): String {
+        val n = try { android.bluetooth.BluetoothAdapter.getDefaultAdapter()?.name } catch (_: Throwable) { null } ?: ""
+        return "svoetv://pair?code=$pairCode&name=" + java.net.URLEncoder.encode(n, "UTF-8")
+    }
     fun resetPairCode() { p.edit().remove("pair_code").apply() }
 
     /** Стартовый набор закрепов уже выставлялся (чтобы не возвращать его после ручной очистки) */

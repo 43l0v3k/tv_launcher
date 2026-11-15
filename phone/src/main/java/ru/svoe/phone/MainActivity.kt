@@ -338,6 +338,33 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    // ---------- QR и подключение ----------
+
+    private fun scanQr() {
+        try {
+            com.google.android.gms.codescanner.GmsBarcodeScanning.getClient(this).startScan()
+                .addOnSuccessListener { b ->
+                    val raw = b.rawValue.orEmpty()
+                    if (raw.startsWith("svoetv://")) handleIntent(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(raw)))
+                    else status = "Это не QR от Своё ТВ"
+                }
+                .addOnFailureListener { status = "Сканер недоступен: ${it.message}" }
+        } catch (e: Throwable) {
+            status = "Сканер недоступен: ${e.message}"
+        }
+    }
+
+    private fun connectNow() {
+        if (code.length != 6) { status = "Введи 6-значный код с ТВ или отсканируй QR"; return }
+        val need = neededPerms().filter { !granted(it) }
+        if (need.isNotEmpty()) { pendingName = tvName.ifBlank { null }; permLauncher.launch(need.toTypedArray()); return }
+        when {
+            tvMac.isNotBlank() -> { status = "Подключаюсь…"; startServiceIfReady(true) }
+            tvName.isNotBlank() -> resolvePair(tvName)
+            else -> { searchName = null; startDiscovery(); status = "Выбери свой ТВ из списка ниже" }
+        }
+    }
+
     // ---------- UI ----------
 
     @Composable
@@ -354,6 +381,9 @@ class MainActivity : ComponentActivity() {
             if (status.isNotBlank()) Txt(status, size = 14.sp)
 
             Txt("ТВ: " + if (tvMac.isBlank()) "не выбран" else "$tvName ($tvMac)")
+
+            Btn("Сканировать QR с ТВ") { scanQr() }
+            Btn("Подключиться") { connectNow() }
 
             Txt("Код с экрана ТВ (6 цифр)", color = DIM, size = 14.sp)
             BasicTextField(
