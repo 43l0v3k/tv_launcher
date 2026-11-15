@@ -4,6 +4,9 @@ on:
   push:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -19,10 +22,27 @@ jobs:
         with:
           gradle-version: 8.9
 
-      - name: Build debug APK
+      - name: Build debug APKs
         run: gradle assembleDebug --no-daemon
+
+      - name: Collect APKs
+        run: |
+          mkdir -p dist
+          cp app/build/outputs/apk/debug/*.apk dist/svoe-tv.apk
+          cp phone/build/outputs/apk/debug/*.apk dist/svoe-phone.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: svoe-tv-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
+          name: svoe-apks
+          path: dist/*.apk
+
+      # Постоянная ссылка на свежие APK: Releases -> «Последняя сборка»
+      - name: Publish release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Последняя сборка
+          body: Свежие APK. svoe-tv.apk ставится на телевизор, svoe-phone.apk на телефон.
+          files: dist/*.apk
+          make_latest: true

@@ -1,0 +1,93 @@
+package ru.svoe.tv
+
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+
+/** Текущий язык интерфейса; меняется на лету в первой настройке. */
+object L {
+    var lang by mutableStateOf("ru")
+}
+
+val LANGS = listOf("ru" to "Русский", "en" to "English", "uk" to "Українська", "es" to "Español")
+private val IDX = mapOf("ru" to 0, "en" to 1, "uk" to 2, "es" to 3)
+
+// Порядок: ru, en, uk, es
+private val S: Map<String, List<String>> = mapOf(
+    "hello_morning" to listOf("Доброе утро", "Good morning", "Доброго ранку", "Buenos días"),
+    "hello_day" to listOf("Добрый день", "Good afternoon", "Добрий день", "Buen día"),
+    "hello_evening" to listOf("Добрый вечер", "Good evening", "Добрий вечір", "Buenas tardes"),
+    "hello_night" to listOf("Доброй ночи", "Good night", "На добраніч", "Buenas noches"),
+    "search" to listOf("Поиск", "Search", "Пошук", "Buscar"),
+    "pinned" to listOf("Закреп", "Pinned", "Закріплені", "Fijadas"),
+    "recent" to listOf("Недавние", "Recent", "Нещодавні", "Recientes"),
+    "recent_empty" to listOf("Здесь появятся приложения, которые ты открывал", "Apps you open will show up here", "Тут з'являться застосунки, які ти відкривав", "Aquí aparecerán las apps que abras"),
+    "widgets" to listOf("Виджеты", "Widgets", "Віджети", "Widgets"),
+    "open" to listOf("Открыть", "Open", "Відкрити", "Abrir"),
+    "phone_link" to listOf("Связь с телефоном", "Phone link", "Зв'язок з телефоном", "Enlace con el teléfono"),
+    "phone_none" to listOf("Телефон не подключён", "Phone not connected", "Телефон не підключено", "Teléfono no conectado"),
+    "wind" to listOf("Ветер", "Wind", "Вітер", "Viento"),
+    "ms" to listOf("м/с", "m/s", "м/с", "m/s"),
+    "no_notifs" to listOf("Новых сообщений нет", "No new messages", "Нових повідомлень немає", "No hay mensajes nuevos"),
+    "qs_display" to listOf("Экран", "Display", "Екран", "Pantalla"),
+    "qs_sound" to listOf("Звук", "Sound", "Звук", "Sonido"),
+    "qs_lock" to listOf("Блокировка", "Lock", "Блокування", "Bloquear"),
+    "qs_settings" to listOf("Настройки", "Settings", "Налаштування", "Ajustes"),
+    "lang_title" to listOf("Язык", "Language", "Мова", "Idioma"),
+    "region_title" to listOf("Регион", "Region", "Регіон", "Región"),
+    "reg_ru" to listOf("Россия", "Russia", "Росія", "Rusia"),
+    "reg_ua" to listOf("Украина", "Ukraine", "Україна", "Ucrania"),
+    "reg_us" to listOf("Америка", "America", "Америка", "América"),
+    "next" to listOf("Далее", "Next", "Далі", "Siguiente"),
+    "skip" to listOf("Пропустить", "Skip", "Пропустити", "Omitir"),
+    "pair_title" to listOf("Привяжите телефон", "Link your phone", "Прив'яжіть телефон", "Vincula tu teléfono"),
+    "pair_download" to listOf("Скачать приложение", "Get the app", "Завантажити застосунок", "Descargar la app"),
+    "pair_link" to listOf("Привязать", "Pair", "Прив'язати", "Vincular"),
+    "pair_code" to listOf("Код", "Code", "Код", "Código"),
+    "pair_ok" to listOf("Телефон подключён", "Phone connected", "Телефон підключено", "Teléfono conectado"),
+    "done" to listOf("Готово!", "All set!", "Готово!", "¡Listo!"),
+    "go_home" to listOf("Перейти на главный экран", "Go to home screen", "Перейти на головний екран", "Ir a la pantalla de inicio"),
+    "setup_lock" to listOf("Сделать блокировку", "Set up a lock", "Налаштувати блокування", "Configurar bloqueo"),
+    "enter_pin" to listOf("Введите пароль", "Enter password", "Введіть пароль", "Introduce la contraseña"),
+    "set_pin" to listOf("Придумайте пароль", "Create a password", "Придумайте пароль", "Crea una contraseña"),
+    "repeat_pin" to listOf("Повторите пароль", "Repeat password", "Повторіть пароль", "Repite la contraseña"),
+    "pin_mismatch" to listOf("Пароли не совпали", "Passwords don't match", "Паролі не збігаються", "Las contraseñas no coinciden"),
+    "pin_wrong" to listOf("Неверный пароль", "Wrong password", "Неправильний пароль", "Contraseña incorrecta"),
+    "pin_hint" to listOf("От 4 до 8 цифр. Можно вводить с пульта цифрами", "4 to 8 digits. You can type with the remote", "Від 4 до 8 цифр. Можна вводити з пульта", "De 4 a 8 dígitos. Puedes escribir con el mando"),
+    "pin_app" to listOf("Закрепить на главном экране", "Pin to home", "Закріпити на головному екрані", "Fijar en inicio"),
+    "unpin" to listOf("Убрать с главного экрана", "Unpin", "Відкріпити", "Quitar de inicio"),
+    "move_left" to listOf("Сдвинуть влево", "Move left", "Посунути ліворуч", "Mover a la izquierda"),
+    "move_right" to listOf("Сдвинуть вправо", "Move right", "Посунути праворуч", "Mover a la derecha"),
+    "app_info" to listOf("О приложении", "App info", "Про застосунок", "Información"),
+    "uninstall" to listOf("Удалить", "Uninstall", "Видалити", "Desinstalar"),
+    "iptv" to listOf("Прямой эфир", "Live TV", "Прямий ефір", "TV en vivo"),
+    "playlist" to listOf("Плейлист", "Playlist", "Плейлист", "Lista"),
+    "playlist_url" to listOf("Ссылка на плейлист (M3U)", "Playlist link (M3U)", "Посилання на плейлист (M3U)", "Enlace de lista (M3U)"),
+    "load" to listOf("Загрузить", "Load", "Завантажити", "Cargar"),
+    "cancel" to listOf("Отмена", "Cancel", "Скасувати", "Cancelar"),
+    "loading" to listOf("Загрузка…", "Loading…", "Завантаження…", "Cargando…"),
+    "no_channels" to listOf("В плейлисте нет каналов", "No channels in playlist", "У плейлисті немає каналів", "La lista no tiene canales"),
+    "pick_to_pin" to listOf("Что закрепить?", "What to pin?", "Що закріпити?", "¿Qué fijar?"),
+    "widgets_pick" to listOf("Какие виджеты показывать", "Choose widgets", "Які віджети показувати", "Elige los widgets"),
+    "w_fin" to listOf("Рынки: IMOEX и BTC", "Markets: IMOEX & BTC", "Ринки: IMOEX і BTC", "Mercados: IMOEX y BTC"),
+    "w_fx" to listOf("Курсы валют", "Exchange rates", "Курси валют", "Divisas"),
+    "w_media" to listOf("Музыка", "Music", "Музика", "Música"),
+    "w_cal" to listOf("Календарь телефона", "Phone calendar", "Календар телефона", "Calendario del teléfono"),
+    "incoming" to listOf("Входящий звонок", "Incoming call", "Вхідний дзвінок", "Llamada entrante"),
+    "media_none" to listOf("Ничего не играет", "Nothing playing", "Нічого не грає", "Nada en reproducción"),
+    "media_grant" to listOf("Нажми, чтобы дать доступ к музыке", "Press to allow media access", "Натисни, щоб дати доступ", "Pulsa para dar acceso"),
+    "no_events" to listOf("Событий нет", "No events", "Подій немає", "Sin eventos"),
+    "voice_na" to listOf("Голосовой ввод недоступен", "Voice input unavailable", "Голосовий ввід недоступний", "Entrada de voz no disponible"),
+    "nothing_found" to listOf("Ничего не найдено", "Nothing found", "Нічого не знайдено", "Nada encontrado"),
+    "all_apps" to listOf("Все приложения", "All apps", "Усі застосунки", "Todas las apps"),
+    "city_title" to listOf("Город для погоды", "City for weather", "Місто для погоди", "Ciudad para el clima"),
+    "city_fail" to listOf("Город не найден", "City not found", "Місто не знайдено", "Ciudad no encontrada"),
+    "save" to listOf("Сохранить", "Save", "Зберегти", "Guardar"),
+    "back" to listOf("Назад", "Back", "Назад", "Atrás"),
+    "weather" to listOf("Погода", "Weather", "Погода", "Clima"),
+    "web_search" to listOf("Искать в интернете", "Search the web", "Шукати в інтернеті", "Buscar en la web"),
+    "from_tv" to listOf("Данные с телевизора", "Data from the TV", "Дані з телевізора", "Datos del televisor"),
+    "from_phone" to listOf("Данные с телефона", "Data from the phone", "Дані з телефона", "Datos del teléfono"),
+)
+
+fun tr(key: String): String = S[key]?.getOrNull(IDX[L.lang] ?: 0) ?: key

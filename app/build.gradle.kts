@@ -12,12 +12,22 @@ android {
         applicationId = "ru.svoe.tv"
         minSdk = 24
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1"
+        versionCode = 3
+        versionName = "0.3"
+    }
+    signingConfigs {
+        create("shared") {
+            storeFile = rootProject.file("svoe.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
     buildTypes {
-        release {
+        getByName("debug") { signingConfig = signingConfigs.getByName("shared") }
+        getByName("release") {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("shared")
         }
     }
     compileOptions {
@@ -41,4 +51,7 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.4.1")
     implementation("androidx.media3:media3-exoplayer-hls:1.4.1")
     implementation("androidx.media3:media3-ui:1.4.1")
+
+    // QR-коды на экране привязки телефона
+    implementation("com.google.zxing:core:3.5.3")
 }
