@@ -382,6 +382,18 @@ class MainActivity : ComponentActivity() {
 
             Txt("ТВ: " + if (tvMac.isBlank()) "не выбран" else "$tvName ($tvMac)")
 
+            Btn("Включить службу связи") {
+                when {
+                    tvMac.isBlank() -> status = "Сначала выбери ТВ (QR или список ниже)"
+                    code.length != 6 -> status = "Сначала введи 6-значный код"
+                    !btOk() -> { status = "Нужно разрешение Bluetooth"; permLauncher.launch(neededPerms().filter { !granted(it) }.toTypedArray()) }
+                    else -> { status = "Служба включена"; startServiceIfReady(true) }
+                }
+            }
+            Btn("Выключить службу связи") {
+                stopService(Intent(this@MainActivity, SyncService::class.java))
+                status = "Служба выключена"
+            }
             Btn("Сканировать QR с ТВ") { scanQr() }
             Btn("Подключиться") { connectNow() }
 
