@@ -60,6 +60,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         prefs = Prefs(this)
         L.lang = prefs.lang
+        Look.wallpaper = prefs.wallpaper
         locked.value = prefs.hasPin && prefs.onboarded
         registerReceiver(screenOff, IntentFilter(Intent.ACTION_SCREEN_OFF))
 
@@ -142,12 +143,20 @@ fun Root(act: MainActivity, prefs: Prefs) {
             delay(60_000)
         }
     }
+    LaunchedEffect(Look.redo) { if (Look.redo > 0) onboarded = false }
     val locked = act.locked.value
+    val wpHour = when (Look.wallpaper) {
+        "morning" -> 8
+        "day" -> 13
+        "evening" -> 19
+        "night" -> 23
+        else -> hour
+    }
 
     BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black)) {
         val scale = min(maxWidth.value / 960f, maxHeight.value / 540f).coerceIn(0.5f, 4f)
         CompositionLocalProvider(LocalScale provides scale) {
-            Wallpaper(hour)
+            Wallpaper(wpHour)
             val stage = when {
                 !onboarded -> 0
                 locked -> 1

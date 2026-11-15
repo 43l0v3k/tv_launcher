@@ -132,84 +132,28 @@ fun Modifier.enter(index: Int, key: Any? = null): Modifier {
     }
 }
 
-// ---------------------------------------------------------------- Liquid glass
+// ---------------------------------------------------------------- Плоские карточки
 
-/**
- * «Жидкое стекло»: полупрозрачная заливка, блик в углу, яркая кромка-градиент.
- * Настоящего размытия фона нет (на Android 11 его нельзя сделать), поэтому стекло имитируется слоями.
- */
-fun Modifier.glassSurface(shape: Shape, glow: Float, selected: Boolean = false, tint: Color = Color.White): Modifier =
+private val CardBase = Color(0xE61B2231)
+
+/** Обычная тёмная карточка без стекла: заливка, тонкая рамка, при фокусе светлее и с белой рамкой. */
+fun Modifier.flatSurface(shape: Shape, glow: Float, selected: Boolean = false, tint: Color = Color.White): Modifier =
     drawBehind {
         val outline = shape.createOutline(size, layoutDirection, this)
-        val sel = if (selected) 0.12f else 0f
-        drawOutline(
-            outline,
-            Brush.verticalGradient(
-                listOf(tint.copy(alpha = 0.24f + 0.12f * glow + sel), tint.copy(alpha = 0.07f + 0.09f * glow + sel)),
-            ),
-        )
-        // блик
-        drawOutline(
-            outline,
-            Brush.radialGradient(
-                listOf(Color.White.copy(alpha = 0.30f + 0.12f * glow), Color.Transparent),
-                center = Offset(size.width * 0.12f, 0f),
-                radius = size.maxDimension * 0.95f,
-            ),
-        )
-        // нижний отсвет
-        drawOutline(
-            outline,
-            Brush.radialGradient(
-                listOf(Accent.copy(alpha = 0.16f + 0.14f * glow), Color.Transparent),
-                center = Offset(size.width * 0.9f, size.height),
-                radius = size.maxDimension * 0.7f,
-            ),
-        )
-        // кромка
-        drawOutline(
-            outline,
-            Brush.linearGradient(
-                listOf(
-                    Color.White.copy(alpha = 0.90f),
-                    Color.White.copy(alpha = 0.10f),
-                    Color.White.copy(alpha = 0.30f),
-                    Color.White.copy(alpha = 0.70f),
-                ),
-                start = Offset.Zero,
-                end = Offset(size.width, size.height),
-            ),
-            style = Stroke(width = 1.3.dp.toPx() + 1.3.dp.toPx() * glow),
-        )
+        val base = if (tint == Color.White) CardBase else androidx.compose.ui.graphics.lerp(CardBase, tint, 0.35f)
+        val lift = 0.10f * glow + (if (selected) 0.07f else 0f)
+        drawOutline(outline, androidx.compose.ui.graphics.lerp(base, Color.White, lift))
+        val ring = when {
+            glow > 0f -> Color.White.copy(alpha = glow)
+            selected -> Accent
+            else -> Color(0x33FFFFFF)
+        }
+        drawOutline(outline, ring, style = Stroke(width = (if (glow > 0f || selected) 2.dp else 1.dp).toPx()))
     }
-
-/** Бегущий блик по сфокусированной карточке. */
-@Composable
-fun BoxScope.Shine() {
-    val tr = rememberInfiniteTransition(label = "shine")
-    val x by tr.animateFloat(
-        initialValue = -0.5f,
-        targetValue = 1.5f,
-        animationSpec = infiniteRepeatable(tween(1700, delayMillis = 500, easing = LinearEasing)),
-        label = "x",
-    )
-    Canvas(Modifier.matchParentSize()) {
-        val w = size.width
-        val band = w * 0.45f
-        val cx = w * x
-        drawRect(
-            Brush.linearGradient(
-                listOf(Color.Transparent, Color.White.copy(alpha = 0.30f), Color.Transparent),
-                start = Offset(cx - band, 0f),
-                end = Offset(cx + band, size.height * 0.7f),
-            ),
-        )
-    }
-}
 
 /**
- * Основная карточка лаунчера. Без onClick — просто стеклянная панель, с onClick — фокусируется с пульта.
- * При фокусе: пружинное увеличение, свечение, бегущий блик.
+ * Основная карточка лаунчера. Без onClick — просто панель, с onClick — фокусируется с пульта.
+ * При фокусе: пружинное увеличение и белая рамка.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -223,6 +167,7 @@ fun GlassCard(
     focusScale: Float = 1.07f,
     tint: Color = Color.White,
     contentAlignment: Alignment = Alignment.Center,
+    onFocus: ((Boolean) -> Unit)? = null,
     content: @Composable BoxScope.() -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
@@ -238,19 +183,18 @@ fun GlassCard(
     var m = modifier
         .zIndex(if (focused) 1f else 0f)
         .graphicsLayer { scaleX = scale; scaleY = scale }
-        .shadow(d(2 + 16 * glow), shape, ambientColor = Accent, spotColor = Accent)
+        .shadow(d(1 + 6 * glow), shape)
         .clip(shape)
-        .glassSurface(shape, glow, selected, tint)
+        .flatSurface(shape, glow, selected, tint)
     val interactive = LocalInteractive.current
     if (onClick != null) {
         m = m.focusProperties { canFocus = interactive }
             .focusRequester(fr)
-            .onFocusChanged { focused = it.isFocused }
+            .onFocusChanged { focused = it.isFocused; onFocus?.invoke(it.isFocused) }
             .combinedClickable(enabled = interactive, onClick = onClick, onLongClick = onLongClick)
     }
     Box(m, contentAlignment = contentAlignment) {
         content()
-        if (focused) Shine()
     }
 }
 

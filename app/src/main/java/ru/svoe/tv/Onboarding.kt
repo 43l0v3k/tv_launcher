@@ -62,7 +62,7 @@ import java.util.Locale
 /** Ссылка на APK приложения для телефона (его собирает тот же GitHub Actions). */
 const val PHONE_APK_URL = "https://github.com/43l0v3k/tv_launcher/releases/download/latest/svoe-phone.apk"
 
-private fun requestDiscoverable(ctx: Context) {
+fun requestDiscoverable(ctx: Context) {
     runCatching {
         ctx.startActivity(
             Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE)

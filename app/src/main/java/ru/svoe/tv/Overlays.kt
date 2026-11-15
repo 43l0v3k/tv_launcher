@@ -532,14 +532,14 @@ fun VolumeSlider() {
 }
 
 @Composable
-fun ControlPanel(act: MainActivity, onClose: () -> Unit, onLock: () -> Unit) {
+fun ControlPanel(act: MainActivity, onClose: () -> Unit, onLock: () -> Unit, onSettings: () -> Unit) {
     fun sys(action: String): () -> Unit = { act.open(Intent(action)); onClose() }
     val tiles: List<Triple<String, String, () -> Unit>> = listOf(
         Triple("wifi", "Wi-Fi", sys(android.provider.Settings.ACTION_WIFI_SETTINGS)),
         Triple("bt", "Bluetooth", sys(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS)),
         Triple("tv", tr("qs_display"), sys(android.provider.Settings.ACTION_DISPLAY_SETTINGS)),
         Triple("sound", tr("qs_sound"), sys(android.provider.Settings.ACTION_SOUND_SETTINGS)),
-        Triple("gear", tr("qs_settings"), sys(android.provider.Settings.ACTION_SETTINGS)),
+        Triple("gear", tr("qs_settings"), { onClose(); onSettings() }),
         Triple("lock", tr("qs_lock"), { onClose(); onLock() }),
     )
     Overlay(onClose, align = Alignment.TopEnd, scrim = 0.35f, origin = TransformOrigin(1f, 0f)) {

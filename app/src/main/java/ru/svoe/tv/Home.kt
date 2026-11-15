@@ -8,6 +8,8 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
@@ -86,6 +88,7 @@ fun Home(act: MainActivity, prefs: Prefs) {
     var playing by remember { mutableStateOf<Int?>(null) }
     var pinDialog by remember { mutableStateOf(false) }
     var voice by remember { mutableStateOf(false) }
+    var focusedPin by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         channels = Playlist.readCached(act)
@@ -131,7 +134,7 @@ fun Home(act: MainActivity, prefs: Prefs) {
     fun run(t: Tl) {
         when (t.id) {
             "builtin:iptv" -> overlay = "iptv"
-            "builtin:settings" -> act.open(Intent(Settings.ACTION_SETTINGS))
+            "builtin:settings" -> overlay = "settings"
             else -> t.app?.let { openApp(it) }
         }
     }
@@ -169,7 +172,9 @@ fun Home(act: MainActivity, prefs: Prefs) {
                         ) {
                             val items = pinned.mapNotNull { resolve(it) }
                             itemsIndexed(items, key = { _, t -> t.id }) { i, t ->
-                                PinTile(t, i == 0, Modifier.enter(4 + i), { run(t) }, { menuId = t.id })
+                                PinTile(
+                                    t, focusedPin == t.id, i == 0, Modifier.enter(4 + i), { run(t) }, { menuId = t.id },
+                                ) { f -> if (f) focusedPin = t.id else if (focusedPin == t.id) focusedPin = null }
                             }
                             item(key = "add") {
                                 GlassCard(Modifier.size(d(70)).enter(9), onClick = { overlay = "apps" }) { Ico("plus", d(28)) }
@@ -264,9 +269,16 @@ fun Home(act: MainActivity, prefs: Prefs) {
             "playlist" -> PlaylistDialog(prefs, { overlay = "iptv" }) { channels = it }
             "city" -> CityDialog(prefs) { overlay = null }
             "widgets" -> WidgetsDialog(widgets, { widgets = it; prefs.widgets = it }, { overlay = null })
-            "panel" -> ControlPanel(act, { overlay = null }) {
-                if (prefs.hasPin) act.locked.value = true else pinDialog = true
-            }
+            "panel" -> ControlPanel(
+                act, { overlay = null },
+                { if (prefs.hasPin) act.locked.value = true else pinDialog = true },
+                { overlay = "settings" },
+            )
+            "settings" -> SettingsScreen(
+                act, prefs, widgets,
+                { widgets = it; prefs.widgets = it },
+                { channels = it },
+            ) { overlay = null }
         }
 
         val mid = menuId
@@ -300,12 +312,29 @@ fun TileIcon(t: Tl, size: androidx.compose.ui.unit.Dp) {
 }
 
 @Composable
-fun PinTile(t: Tl, big: Boolean, modifier: Modifier, onClick: () -> Unit, onLong: () -> Unit) {
-    GlassCard(modifier.size(if (big) d(118) else d(78)), onClick = onClick, onLongClick = onLong, autoFocus = big) {
+fun PinTile(
+    t: Tl,
+    big: Boolean,
+    autoFocus: Boolean,
+    modifier: Modifier,
+    onClick: () -> Unit,
+    onLong: () -> Unit,
+    onFocus: (Boolean) -> Unit,
+) {
+    // Большая плитка = та, на которую навёлся сейчас
+    val k by animateFloatAsState(if (big) 1f else 0f, spring(dampingRatio = 0.72f, stiffness = 380f), label = "pin")
+    GlassCard(
+        modifier.size(d(78 + 40 * k)),
+        onClick = onClick,
+        onLongClick = onLong,
+        autoFocus = autoFocus,
+        focusScale = 1.03f,
+        onFocus = onFocus,
+    ) {
         Column(Modifier.padding(d(6)), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            TileIcon(t, if (big) d(58) else d(36))
-            Spacer(Modifier.height(d(if (big) 8 else 4)))
-            Label(t.label, if (big) 15 else 9, if (big) FontWeight.SemiBold else FontWeight.Medium, maxLines = 1, align = TextAlign.Center)
+            TileIcon(t, d(36 + 22 * k))
+            Spacer(Modifier.height(d(4 + 4 * k)))
+            Label(t.label, 9 + 6 * k, if (big) FontWeight.SemiBold else FontWeight.Medium, maxLines = 1, align = TextAlign.Center)
         }
     }
 }

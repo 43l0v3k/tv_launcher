@@ -42,6 +42,13 @@ class Prefs(ctx: Context) {
         get() = p.getString("playlist_url", "") ?: ""
         set(v) { p.edit().putString("playlist_url", v).apply() }
 
+    /** Обои: auto | morning | day | evening | night */
+    var wallpaper: String
+        get() = p.getString("wallpaper", "auto") ?: "auto"
+        set(v) { p.edit().putString("wallpaper", v).apply() }
+
+    fun resetPairCode() { p.edit().remove("pair_code").apply() }
+
     /** Стартовый набор закрепов уже выставлялся (чтобы не возвращать его после ручной очистки) */
     var autopinned: Boolean
         get() = p.getBoolean("autopinned", false)
