@@ -342,7 +342,7 @@ class MainActivity : ComponentActivity() {
 
     private fun scanQr() {
         try {
-            com.google.android.gms.codescanner.GmsBarcodeScanning.getClient(this).startScan()
+            com.google.mlkit.vision.codescanner.GmsBarcodeScanning.getClient(this).startScan()
                 .addOnSuccessListener { b ->
                     val raw = b.rawValue.orEmpty()
                     if (raw.startsWith("svoetv://")) handleIntent(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(raw)))
