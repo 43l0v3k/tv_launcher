@@ -4,6 +4,7 @@ import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
 import java.security.SecureRandom
@@ -128,25 +129,112 @@ object Playlist {
         if (f.exists()) parse(f.readText()) else emptyList()
     }
 
-    /** Скачивает плейлист, кэширует на диск и возвращает каналы. Бросает исключение при ошибке. */
-    suspend fun download(ctx: Context, url: String): List<Channel> = withContext(Dispatchers.IO) {
-        val conn = URL(url).openConnection().apply { connectTimeout = 10_000; readTimeout = 20_000 }
-        val text = conn.getInputStream().bufferedReader().use { it.readText() }
-        val list = parse(text)
+    class PlaylistError(msg: String) : Exception(msg)
+
+    /** Превращает «страничные» ссылки (GitHub, Gist, Pastebin, Drive, Dropbox) в прямые. */
+    fun normalize(input: String): String {
+        var u = input.trim().replace(" ", "")
+        if (u.isEmpty()) return u
+        if (!u.contains("://")) u = "https://$u"
+        Regex("^https?://(www\\.)?github\\.com/([^/]+)/([^/]+)/blob/(.+)$").find(u)?.let {
+            return "https://raw.githubusercontent.com/${it.groupValues[2]}/${it.groupValues[3]}/${it.groupValues[4]}"
+        }
+        Regex("^https?://gist\\.github\\.com/([^/]+)/([0-9a-f]+)/?$").find(u)?.let {
+            return "https://gist.githubusercontent.com/${it.groupValues[1]}/${it.groupValues[2]}/raw"
+        }
+        Regex("^https?://(www\\.)?pastebin\\.com/(?!raw/)([A-Za-z0-9]+)/?$").find(u)?.let {
+            return "https://pastebin.com/raw/${it.groupValues[2]}"
+        }
+        Regex("^https?://drive\\.google\\.com/file/d/([^/]+)").find(u)?.let {
+            return "https://drive.google.com/uc?export=download&id=${it.groupValues[1]}"
+        }
+        if (u.contains("dropbox.com")) u = u.replace("dl=0", "dl=1")
+        return u
+    }
+
+    /** Скачивает плейлист, кэширует на диск и возвращает каналы. Бросает понятную ошибку. */
+    suspend fun download(ctx: Context, input: String): List<Channel> = withContext(Dispatchers.IO) {
+        val start = normalize(input)
+        if (start.isEmpty()) throw PlaylistError("Вставь ссылку на плейлист")
+        var url = start
+        var bytes: ByteArray? = null
+        var ctype = ""
+        for (hop in 0 until 8) {
+            val c = (URL(url).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 12_000; readTimeout = 25_000
+                instanceFollowRedirects = false
+                setRequestProperty("User-Agent", "VLC/3.0.20 LibVLC/3.0.20")
+                setRequestProperty("Accept", "*/*")
+                setRequestProperty("Accept-Encoding", "gzip")
+            }
+            val code = c.responseCode
+            if (code in 300..399) {
+                val loc = c.getHeaderField("Location") ?: throw PlaylistError("Редирект без адреса")
+                url = URL(URL(url), loc).toString()
+                c.disconnect()
+                continue
+            }
+            if (code != 200) throw PlaylistError("Сервер ответил: HTTP $code")
+            ctype = (c.contentType ?: "").lowercase()
+            val raw = c.inputStream.use { it.readBytes() }
+            bytes = if (raw.size > 2 && raw[0] == 0x1f.toByte() && raw[1] == 0x8b.toByte())
+                java.util.zip.GZIPInputStream(raw.inputStream()).use { it.readBytes() } else raw
+            break
+        }
+        val data = bytes ?: throw PlaylistError("Слишком много перенаправлений")
+        var text = String(data, Charsets.UTF_8)
+        if (text.count { it == '\uFFFD' } > 5) text = String(data, charset("windows-1251"))
+        text = text.removePrefix("\uFEFF")
+        val head = text.trimStart().take(300).lowercase()
+        if (head.startsWith("<!doctype html") || head.startsWith("<html") || ctype.contains("text/html"))
+            throw PlaylistError("Это веб-страница, а не плейлист. Нужна прямая ссылка на файл .m3u / .m3u8")
+        if (ctype.startsWith("video/") || ctype.startsWith("audio/") || ctype.contains("mpegurl") && !text.contains("#EXTINF") && !text.contains("#EXT-X-STREAM-INF"))
+            return@withContext listOf(Channel("Поток", url)).also { }
+        val list = parse(text, url)
         if (list.isNotEmpty()) file(ctx).writeText(text)
         list
     }
 
-    fun parse(text: String): List<Channel> {
+    fun parse(text: String, base: String = ""): List<Channel> {
+        // один HLS-поток (m3u8 с сегментами) — это один канал, а не список
+        if (text.contains("#EXT-X-STREAM-INF") || text.contains("#EXT-X-TARGETDURATION")) {
+            return if (base.isNotEmpty()) listOf(Channel("Поток", base)) else emptyList()
+        }
+        // PLS
+        if (text.trimStart().startsWith("[playlist]", ignoreCase = true)) {
+            val files = Regex("(?im)^File(\\d+)=(.+)$").findAll(text).associate { it.groupValues[1] to it.groupValues[2].trim() }
+            val titles = Regex("(?im)^Title(\\d+)=(.+)$").findAll(text).associate { it.groupValues[1] to it.groupValues[2].trim() }
+            return files.map { (k, v) -> Channel(titles[k]?.ifBlank { null } ?: v, resolve(v, base)) }
+        }
         val out = mutableListOf<Channel>()
         var name: String? = null
         for (raw in text.lineSequence()) {
             val l = raw.trim()
             when {
-                l.startsWith("#EXTINF") -> name = l.substringAfterLast(",").trim()
-                l.isNotEmpty() && !l.startsWith("#") -> { out += Channel(name?.ifBlank { null } ?: l, l); name = null }
+                l.startsWith("#EXTINF", ignoreCase = true) -> name = extName(l)
+                l.startsWith("#") || l.isEmpty() -> {}
+                l.contains("://") || base.isNotEmpty() -> {
+                    out += Channel(name?.ifBlank { null } ?: l.substringAfterLast('/').substringBefore('?').ifBlank { l }, resolve(l, base))
+                    name = null
+                }
             }
         }
         return out
+    }
+
+    private fun resolve(u: String, base: String): String =
+        if (u.contains("://") || base.isEmpty()) u else runCatching { URL(URL(base), u).toString() }.getOrDefault(u)
+
+    /** Имя канала: текст после последней запятой ВНЕ кавычек; если пусто — tvg-name. */
+    private fun extName(l: String): String {
+        var q = false
+        var cut = -1
+        for (i in l.indices) {
+            if (l[i] == '"') q = !q
+            else if (l[i] == ',' && !q) cut = i
+        }
+        val n = if (cut >= 0) l.substring(cut + 1).trim() else ""
+        if (n.isNotEmpty()) return n
+        return Regex("tvg-name=\"([^\"]*)\"").find(l)?.groupValues?.get(1)?.trim().orEmpty()
     }
 }

@@ -379,11 +379,16 @@ fun PlaylistDialog(prefs: Prefs, onClose: () -> Unit, onLoaded: (List<Channel>) 
                                     if (it.isEmpty()) status = tr("no_channels")
                                     else { prefs.playlistUrl = url.trim(); onLoaded(it); onClose() }
                                 }
-                                .onFailure { status = "${it.message}" }
+                                .onFailure {
+                                    status = if (it is Playlist.PlaylistError) it.message ?: ""
+                                    else "${tr("pl_fail")}: ${it.javaClass.simpleName}"
+                                }
                         }
                     }
+                    Btn(tr("pl_example")) { url = "https://iptv-org.github.io/iptv/languages/rus.m3u" }
                     Btn(tr("cancel")) { onClose() }
                 }
+                Label(tr("pl_hint"), 11, color = Muted)
             }
         }
     }
