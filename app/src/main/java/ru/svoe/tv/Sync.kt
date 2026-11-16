@@ -14,7 +14,7 @@ import java.io.IOException
 import java.util.UUID
 import kotlin.concurrent.thread
 
-data class Notif(val app: String, val title: String, val text: String, val time: Long)
+data class Notif(val app: String, val title: String, val text: String, val time: Long, val kind: String = "msg")
 data class CalEvent(val title: String, val start: Long, val end: Long, val allDay: Boolean)
 
 /**
@@ -118,6 +118,11 @@ object Sync {
                     toast.value = n
                 }
             }
+            "alert" -> {
+                val n = Notif(j.optString("app"), j.optString("title"), j.optString("text"), System.currentTimeMillis(), j.optString("kind", "alarm"))
+                main.post { toast.value = n }
+            }
+            "alert_end" -> main.post { if (toast.value?.kind == "alarm") toast.value = null }
             "call" -> {
                 val ring = j.optString("state") == "ring"
                 val who = j.optString("who").ifBlank { "Неизвестный номер" }

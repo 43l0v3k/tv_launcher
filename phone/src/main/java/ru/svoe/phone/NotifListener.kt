@@ -87,6 +87,7 @@ class NotifListener : NotificationListenerService() {
             val n = sbn.notification ?: return
             val pkg = sbn.packageName ?: return
             if (pkg == packageName || pkg == "android" || pkg == "com.android.systemui") return
+            if (handleClock(sbn, n, pkg)) return
             if ((n.flags and Notification.FLAG_ONGOING_EVENT) != 0) return
             if ((n.flags and Notification.FLAG_GROUP_SUMMARY) != 0) return
 
@@ -107,6 +108,44 @@ class NotifListener : NotificationListenerService() {
                 .put("title", title).put("text", text)
             Link.send(json.toString())
         } catch (e: Throwable) {
+        }
+    }
+
+    private var clockKey = ""
+    private var alarmId = ""
+
+    /** Будильник и таймер: приходят как «постоянные» уведомления приложения часов, поэтому обрабатываем отдельно. */
+    private fun handleClock(sbn: StatusBarNotification, n: Notification, pkg: String): Boolean {
+        val clock = pkg.contains("clock", ignoreCase = true) || n.category == Notification.CATEGORY_ALARM
+        if (!clock) return false
+        val ex = n.extras ?: return true
+        val title = ex.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
+        val text = ex.getCharSequence(Notification.EXTRA_TEXT)?.toString().orEmpty()
+        if (title.isBlank() && text.isBlank()) return true
+        val all = "$title $text".lowercase()
+        val kind = when {
+            all.contains("таймер") || all.contains("timer") || all.contains("секундомер") -> "timer"
+            else -> "alarm"
+        }
+        val key = "$pkg|${sbn.id}|$title|$text"
+        if (key == clockKey) return true
+        clockKey = key
+        if (kind == "alarm") alarmId = "${sbn.packageName}|${sbn.id}"
+        Link.send(
+            JSONObject().put("t", "alert").put("kind", kind).put("app", label(pkg))
+                .put("title", title).put("text", text).toString()
+        )
+        return true
+    }
+
+    override fun onNotificationRemoved(sbn: StatusBarNotification?) {
+        try {
+            if (sbn != null && alarmId.isNotEmpty() && "${sbn.packageName}|${sbn.id}" == alarmId) {
+                alarmId = ""
+                clockKey = ""
+                Link.send(JSONObject().put("t", "alert_end").toString())
+            }
+        } catch (_: Throwable) {
         }
     }
 

@@ -409,7 +409,7 @@ fun NotifSlot(modifier: Modifier) {
     LaunchedEffect(toast) {
         if (toast != null) {
             prog.snapTo(1f)
-            prog.animateTo(0f, tween(10_000, easing = LinearEasing))
+            prog.animateTo(0f, tween(if (toast.kind == "alarm") 120_000 else 10_000, easing = LinearEasing))
             if (Sync.toast.value === toast) Sync.toast.value = null
         }
     }
@@ -441,11 +441,14 @@ fun NotifSlot(modifier: Modifier) {
                     horizontalArrangement = Arrangement.spacedBy(d(12)),
                 ) {
                     Box(Modifier.size(d(46)).background(Color(0x40FFFFFF), RoundedCornerShape(d(12))), contentAlignment = Alignment.Center) {
-                        Label(t.app.take(1).uppercase().ifEmpty { "?" }, 22, FontWeight.Bold)
+                        Label(
+                            when (t.kind) { "alarm" -> "⏰"; "timer" -> "⏱"; else -> t.app.take(1).uppercase().ifEmpty { "?" } },
+                            22, FontWeight.Bold,
+                        )
                     }
                     Column(Modifier.weight(1f)) {
-                        Label("${t.app} • ${t.title}", 13, color = Accent, maxLines = 1)
-                        Label(t.text, 19, FontWeight.SemiBold, maxLines = 2)
+                        Label("${t.app} • ${t.title}".trimEnd(' ', '•'), 13, color = if (t.kind == "msg") Accent else Color(0xFFFFC857), maxLines = 1)
+                        Label(t.text.ifEmpty { t.title }, 19, FontWeight.SemiBold, maxLines = 2)
                     }
                 }
                 Box(Modifier.align(Alignment.BottomStart).fillMaxWidth(prog.value.coerceIn(0.001f, 1f)).height(d(3)).background(Accent))
