@@ -89,6 +89,7 @@ fun Home(act: MainActivity, prefs: Prefs) {
     var pinDialog by remember { mutableStateOf(false) }
     var voice by remember { mutableStateOf(false) }
     var focusedPin by remember { mutableStateOf<String?>(null) }
+    var pinFocused by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         channels = Playlist.readCached(act)
@@ -173,11 +174,11 @@ fun Home(act: MainActivity, prefs: Prefs) {
                             val items = pinned.mapNotNull { resolve(it) }
                             itemsIndexed(items, key = { _, t -> t.id }) { i, t ->
                                 PinTile(
-                                    t, focusedPin == t.id, i == 0, Modifier.enter(4 + i), { run(t) }, { menuId = t.id },
-                                ) { f -> if (f) focusedPin = t.id else if (focusedPin == t.id) focusedPin = null }
+                                    t, focusedPin == t.id, i == 0 && !pinFocused, Modifier.enter(4 + i), { run(t) }, { menuId = t.id },
+                                ) { f -> if (f) { focusedPin = t.id; pinFocused = true } else if (focusedPin == t.id) focusedPin = null }
                             }
                             item(key = "add") {
-                                GlassCard(Modifier.size(d(78)).enter(9), onClick = { overlay = "apps" }) {
+                                GlassCard(Modifier.size(d(78)).enter(9), onClick = { overlay = "apps" }, onFocus = { if (it) pinFocused = true }) {
                                     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                                         Ico("grid", d(28))
                                         Spacer(Modifier.height(d(4)))
