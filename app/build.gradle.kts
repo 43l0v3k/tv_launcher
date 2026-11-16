@@ -11,6 +11,7 @@ android {
     defaultConfig {
         applicationId = "ru.svoe.tv"
         minSdk = 24
+        ndk { abiFilters += listOf("armeabi-v7a", "arm64-v8a") }
         targetSdk = 34
         versionCode = 3
         versionName = "0.3"
@@ -48,9 +49,9 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
     // IPTV-плеер
-    implementation("androidx.media3:media3-exoplayer:1.4.1")
-    implementation("androidx.media3:media3-exoplayer-hls:1.4.1")
-    implementation("androidx.media3:media3-ui:1.4.1")
+
+    // Видеоплеер для IPTV: движок VLC
+    implementation("org.videolan.android:libvlc-all:3.6.0")
 
     // QR-коды на экране привязки телефона
     implementation("com.google.zxing:core:3.5.3")

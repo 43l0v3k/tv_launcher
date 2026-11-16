@@ -70,9 +70,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.media3.common.MediaItem
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.PlayerView
+import org.videolan.libvlc.LibVLC
+import org.videolan.libvlc.Media
+import org.videolan.libvlc.MediaPlayer
+import org.videolan.libvlc.util.VLCVideoLayout
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -401,13 +402,37 @@ fun PlayerScreen(channels: List<Channel>, start: Int, onClose: () -> Unit) {
     val ctx = LocalContext.current
     var idx by remember { mutableIntStateOf(start.coerceIn(0, channels.size - 1)) }
     var showName by remember { mutableStateOf(true) }
-    val player = remember { ExoPlayer.Builder(ctx).build() }
-    DisposableEffect(Unit) { onDispose { player.release() } }
+    var buffering by remember { mutableIntStateOf(0) }
+    var failed by remember { mutableStateOf(false) }
+    val vlc = remember { LibVLC(ctx.applicationContext, arrayListOf("--network-caching=1500", "--http-reconnect")) }
+    val player = remember { MediaPlayer(vlc) }
+    DisposableEffect(Unit) {
+        player.setEventListener { e ->
+            when (e.type) {
+                MediaPlayer.Event.Buffering -> buffering = e.buffering.toInt()
+                MediaPlayer.Event.Playing -> { failed = false; buffering = 100 }
+                MediaPlayer.Event.EncounteredError -> failed = true
+            }
+        }
+        onDispose {
+            runCatching { player.setEventListener(null) }
+            runCatching { player.stop() }
+            runCatching { player.detachViews() }
+            runCatching { player.release() }
+            runCatching { vlc.release() }
+        }
+    }
 
     LaunchedEffect(idx) {
-        player.setMediaItem(MediaItem.fromUri(channels[idx].url))
-        player.prepare()
-        player.playWhenReady = true
+        failed = false
+        buffering = 0
+        runCatching {
+            val m = Media(vlc, Uri.parse(channels[idx].url))
+            m.addOption(":network-caching=1500")
+            player.media = m
+            m.release()
+            player.play()
+        }.onFailure { failed = true }
         showName = true
         delay(3000)
         showName = false
@@ -430,7 +455,7 @@ fun PlayerScreen(channels: List<Channel>, start: Int, onClose: () -> Unit) {
             },
     ) {
         AndroidView(
-            factory = { c -> PlayerView(c).apply { useController = false; this.player = player } },
+            factory = { c -> VLCVideoLayout(c).also { player.attachViews(it, null, false, false) } },
             modifier = Modifier.fillMaxSize(),
         )
         if (showName) {
@@ -438,39 +463,13 @@ fun PlayerScreen(channels: List<Channel>, start: Int, onClose: () -> Unit) {
                 Label("${idx + 1}. ${channels[idx].name}", 24, FontWeight.SemiBold)
             }
         }
-    }
-}
-
-// ---------------------------------------------------------------- Город и виджеты
-
-@Composable
-fun CityDialog(prefs: Prefs, onClose: () -> Unit) {
-    val scope = rememberCoroutineScope()
-    var q by remember { mutableStateOf(prefs.city) }
-    var status by remember { mutableStateOf("") }
-    val fr = remember { FocusRequester() }
-    LaunchedEffect(Unit) { delay(300); runCatching { fr.requestFocus() } }
-    fun save() {
-        scope.launch {
-            val r = geocode(q.trim())
-            if (r == null) status = tr("city_fail")
-            else {
-                prefs.city = r.first; prefs.lat = r.second; prefs.lon = r.third
-                loadWeather(prefs)
-                onClose()
+        if (failed) {
+            Box(Modifier.align(Alignment.Center).background(Color(0xCC000000), RoundedCornerShape(d(10))).padding(d(18))) {
+                Label(tr("pl_open_fail"), 20, FontWeight.SemiBold)
             }
-        }
-    }
-    Overlay(onClose) {
-        GlassCard(Modifier.width(d(480)), shape = RoundedCornerShape(d(24))) {
-            Column(Modifier.padding(d(22)), verticalArrangement = Arrangement.spacedBy(d(12))) {
-                Label(tr("city_title"), 20, FontWeight.SemiBold)
-                TextBox(q, { q = it }, Modifier.fillMaxWidth(), "", fr, ImeAction.Done) { save() }
-                if (status.isNotEmpty()) Label(status, 13, color = Bad)
-                Row(horizontalArrangement = Arrangement.spacedBy(d(10))) {
-                    Btn(tr("save"), tint = Accent) { save() }
-                    Btn(tr("cancel")) { onClose() }
-                }
+        } else if (buffering in 0..99) {
+            Box(Modifier.align(Alignment.Center).background(Color(0xAA000000), RoundedCornerShape(d(10))).padding(d(14))) {
+                Label("${tr("loading")} $buffering%", 18)
             }
         }
     }

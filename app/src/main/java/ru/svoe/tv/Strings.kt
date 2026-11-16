@@ -66,6 +66,7 @@ private val S: Map<String, List<String>> = mapOf(
     "pl_fail" to listOf("Не удалось скачать", "Download failed", "Не вдалося завантажити", "Error de descarga"),
     "pl_example" to listOf("Пример", "Example", "Приклад", "Ejemplo"),
     "pl_hint" to listOf("Нужна прямая ссылка на .m3u / .m3u8. Ссылки GitHub, Gist, Pastebin и Drive превращаются в прямые сами.", "Use a direct .m3u / .m3u8 link. GitHub, Gist, Pastebin and Drive links are converted automatically.", "Потрібне пряме посилання на .m3u / .m3u8. Посилання GitHub, Gist, Pastebin і Drive перетворюються самі.", "Usa un enlace directo .m3u / .m3u8. Los enlaces de GitHub, Gist, Pastebin y Drive se convierten solos."),
+    "pl_open_fail" to listOf("Канал не открывается", "Channel won't open", "Канал не відкривається", "El canal no se abre"),
     "load" to listOf("Загрузить", "Load", "Завантажити", "Cargar"),
     "cancel" to listOf("Отмена", "Cancel", "Скасувати", "Cancelar"),
     "loading" to listOf("Загрузка…", "Loading…", "Завантаження…", "Cargando…"),
