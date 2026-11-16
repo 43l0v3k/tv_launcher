@@ -75,6 +75,8 @@ private val S: Map<String, List<String>> = mapOf(
     "w_media" to listOf("Музыка", "Music", "Музика", "Música"),
     "w_cal" to listOf("Календарь телефона", "Phone calendar", "Календар телефона", "Calendario del teléfono"),
     "incoming" to listOf("Входящий звонок", "Incoming call", "Вхідний дзвінок", "Llamada entrante"),
+    "media_phone" to listOf("Играет на телефоне", "Playing on phone", "Грає на телефоні", "Suena en el móvil"),
+    "media_phone_paused" to listOf("Пауза на телефоне", "Paused on phone", "Пауза на телефоні", "En pausa en el móvil"),
     "media_none" to listOf("Ничего не играет", "Nothing playing", "Нічого не грає", "Nada en reproducción"),
     "media_grant" to listOf("Нажми, чтобы дать доступ к музыке", "Press to allow media access", "Натисни, щоб дати доступ", "Pulsa para dar acceso"),
     "no_events" to listOf("Событий нет", "No events", "Подій немає", "Sin eventos"),

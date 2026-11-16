@@ -175,6 +175,9 @@ class SyncService : Service() {
             try { sendBatt(battery()) } catch (_: Throwable) {}
         }, 0, 60, TimeUnit.SECONDS)
         ex.scheduleWithFixedDelay({
+            try { NotifListener.push() } catch (_: Throwable) {}
+        }, 2, 20, TimeUnit.SECONDS)
+        ex.scheduleWithFixedDelay({
             try { Link.send(Cal.build(this).toString()) } catch (_: Throwable) {}
         }, 1, 15 * 60L, TimeUnit.SECONDS)
     }

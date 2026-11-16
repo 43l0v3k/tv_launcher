@@ -7,6 +7,7 @@ import android.os.Handler
 import android.os.Looper
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import org.json.JSONObject
 import java.io.IOException
@@ -23,6 +24,7 @@ data class CalEvent(val title: String, val start: Long, val end: Long, val allDa
  *   {"t":"batt","level":55}
  *   {"t":"notif","app":"Telegram","title":"Имя","text":"Привет"}
  *   {"t":"call","state":"ring","who":"Мама"}  /  {"t":"call","state":"end"}
+ *   {"t":"media","title":"..","artist":"..","playing":true,"dur":ms,"pos":ms}
  *   {"t":"cal","events":[{"title":"..","start":ms,"end":ms,"allDay":false}]}
  */
 object Sync {
@@ -35,6 +37,14 @@ object Sync {
     val connected = mutableStateOf(false)
     val phoneName = mutableStateOf("")
     val battery = mutableIntStateOf(-1)
+
+    // музыка, которая играет на телефоне
+    val pmTitle = mutableStateOf("")
+    val pmArtist = mutableStateOf("")
+    val pmPlaying = mutableStateOf(false)
+    val pmDur = mutableLongStateOf(0L)
+    val pmPos = mutableLongStateOf(0L)
+    @Volatile var pmAt = 0L
 
     @Volatile private var code: String = ""
     private val main = Handler(Looper.getMainLooper())
@@ -90,7 +100,7 @@ object Sync {
         } catch (_: Throwable) {
         } finally {
             runCatching { sock.close() }
-            main.post { connected.value = false; call.value = null }
+            main.post { connected.value = false; call.value = null; pmTitle.value = ""; pmPlaying.value = false }
         }
     }
 
@@ -112,6 +122,15 @@ object Sync {
                 val ring = j.optString("state") == "ring"
                 val who = j.optString("who").ifBlank { "Неизвестный номер" }
                 main.post { call.value = if (ring) who else null }
+            }
+            "media" -> {
+                val ti = j.optString("title"); val ar = j.optString("artist")
+                val pl = j.optBoolean("playing"); val du = j.optLong("dur"); val po = j.optLong("pos")
+                main.post {
+                    pmTitle.value = ti; pmArtist.value = ar; pmPlaying.value = pl
+                    pmDur.longValue = du; pmPos.longValue = po
+                    pmAt = android.os.SystemClock.elapsedRealtime()
+                }
             }
             "cal" -> {
                 val arr = j.optJSONArray("events")

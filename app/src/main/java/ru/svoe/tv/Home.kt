@@ -590,33 +590,45 @@ fun FxCard(modifier: Modifier) {
 @Composable
 fun MediaCard(modifier: Modifier, act: MainActivity) {
     val has = Media.hasAccess.value
+    // играет телефон, а ТВ молчит — показываем телефон
+    val phoneSrc = Sync.pmTitle.value.isNotEmpty() && !Media.playing.value &&
+        (Sync.pmPlaying.value || Media.title.value.isEmpty())
+    val mTitle = if (phoneSrc) Sync.pmTitle.value else Media.title.value
+    val mArtist = if (phoneSrc) Sync.pmArtist.value else Media.artist.value
+    val mDur = if (phoneSrc) Sync.pmDur.longValue else Media.duration.longValue
+    val mPlaying = if (phoneSrc) Sync.pmPlaying.value else Media.playing.value
     var pos by remember { mutableLongStateOf(0L) }
-    LaunchedEffect(Media.playing.value, Media.title.value) {
+    LaunchedEffect(phoneSrc, mPlaying, mTitle) {
         while (true) {
-            pos = Media.position()
+            pos = if (phoneSrc) {
+                val p = Sync.pmPos.longValue
+                if (Sync.pmPlaying.value) p + (android.os.SystemClock.elapsedRealtime() - Sync.pmAt) else p
+            } else Media.position()
             delay(1000)
         }
     }
     GlassCard(
         modifier,
-        onClick = if (!has) ({ act.open(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }) else null,
+        onClick = if (!has && !phoneSrc) ({ act.open(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }) else null,
     ) {
-        if (!has) {
+        if (!has && !phoneSrc) {
             Label(tr("media_grant"), 12, color = Muted, align = TextAlign.Center, modifier = Modifier.padding(d(12)))
-        } else if (Media.title.value.isEmpty()) {
+        } else if (mTitle.isEmpty()) {
             Label(tr("media_none"), 13, color = Muted, align = TextAlign.Center)
         } else {
             Column(Modifier.fillMaxSize().padding(d(12)), verticalArrangement = Arrangement.SpaceBetween) {
                 Column {
-                    Label(Media.title.value, 14, FontWeight.SemiBold, maxLines = 1)
-                    Label(Media.artist.value.ifEmpty { " " }, 11, color = Muted, maxLines = 1)
+                    Label(mTitle, 14, FontWeight.SemiBold, maxLines = 1)
+                    Label(mArtist.ifEmpty { " " }, 11, color = Muted, maxLines = 1)
                 }
-                val dur = Media.duration.longValue
+                val dur = mDur
                 Box(Modifier.fillMaxWidth().height(d(4)).background(Color(0x33FFFFFF), RoundedCornerShape(50))) {
                     val f = if (dur > 0) (pos.toFloat() / dur).coerceIn(0.001f, 1f) else 0.001f
                     Box(Modifier.fillMaxWidth(f).fillMaxHeight().background(TextC, RoundedCornerShape(50)))
                 }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                if (phoneSrc) {
+                    Label(if (mPlaying) tr("media_phone") else tr("media_phone_paused"), 11, color = Muted, maxLines = 1)
+                } else Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
                     GlassCard(Modifier.size(d(30)), onClick = { Media.prev() }, shape = CircleShape, focusScale = 1.15f) { Ico("prev", d(14)) }
                     GlassCard(Modifier.size(d(34)), onClick = { Media.toggle() }, shape = CircleShape, focusScale = 1.15f) {
                         Ico(if (Media.playing.value) "pause" else "play", d(16))
@@ -625,7 +637,7 @@ fun MediaCard(modifier: Modifier, act: MainActivity) {
                 }
             }
         }
-        SourceBadge("tv", Modifier.align(Alignment.TopEnd).padding(d(6)))
+        SourceBadge(if (phoneSrc) "phone" else "tv", Modifier.align(Alignment.TopEnd).padding(d(6)))
     }
 }
 
