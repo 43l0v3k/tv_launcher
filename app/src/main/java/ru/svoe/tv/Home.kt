@@ -86,6 +86,7 @@ fun Home(act: MainActivity, prefs: Prefs) {
     var overlay by remember { mutableStateOf<String?>(null) }
     var menuId by remember { mutableStateOf<String?>(null) }
     var playing by remember { mutableStateOf<Int?>(null) }
+    LaunchedEffect(playing) { Look.busy = playing != null }
     var pinDialog by remember { mutableStateOf(false) }
     var voice by remember { mutableStateOf(false) }
     var focusedPin by remember { mutableStateOf<String?>(null) }

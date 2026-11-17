@@ -35,6 +35,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.core.graphics.drawable.toBitmap
 import kotlinx.coroutines.delay
+import android.os.SystemClock
+import android.view.MotionEvent
+import androidx.compose.animation.AnimatedVisibility
 import java.util.Calendar
 import kotlin.math.min
 
@@ -45,6 +48,37 @@ class MainActivity : ComponentActivity() {
     val menuTick = mutableIntStateOf(0)
     val locked = mutableStateOf(false)
     private lateinit var prefs: Prefs
+
+    /** Когда пользователь последний раз что-то нажимал. */
+    @Volatile var lastInput = SystemClock.elapsedRealtime()
+    private var swallowUp = false
+
+    private fun wake(): Boolean {
+        lastInput = SystemClock.elapsedRealtime()
+        if (Look.saver) { Look.saver = false; return true }
+        return false
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.action == KeyEvent.ACTION_DOWN) {
+            if (wake()) { swallowUp = true; return true }
+        } else if (event.action == KeyEvent.ACTION_UP && swallowUp) {
+            swallowUp = false
+            return true
+        }
+        lastInput = SystemClock.elapsedRealtime()
+        return super.dispatchKeyEvent(event)
+    }
+
+    override fun dispatchGenericMotionEvent(ev: MotionEvent): Boolean {
+        if (wake()) return true
+        return super.dispatchGenericMotionEvent(ev)
+    }
+
+    override fun onUserInteraction() {
+        super.onUserInteraction()
+        lastInput = SystemClock.elapsedRealtime()
+    }
 
     private val screenOff = object : BroadcastReceiver() {
         override fun onReceive(c: Context?, i: Intent?) {
@@ -76,6 +110,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        Look.saver = false
+        lastInput = SystemClock.elapsedRealtime()
         tick.intValue++ // обновить список приложений после установки/удаления
         Media.start(this)
     }
@@ -144,6 +180,13 @@ fun Root(act: MainActivity, prefs: Prefs) {
         }
     }
     LaunchedEffect(Look.redo) { if (Look.redo > 0) onboarded = false }
+    LaunchedEffect(onboarded) {
+        while (true) {
+            delay(1000)
+            val idleMs = SystemClock.elapsedRealtime() - act.lastInput
+            if (onboarded && !Look.busy && prefs.ssMode != "off" && idleMs > prefs.ssMinutes * 60_000L) Look.saver = true
+        }
+    }
     val locked = act.locked.value
     val wpHour = when (Look.wallpaper) {
         "morning" -> 8
@@ -175,6 +218,9 @@ fun Root(act: MainActivity, prefs: Prefs) {
                     1 -> LockScreen(prefs) { act.locked.value = false }
                     else -> Home(act, prefs)
                 }
+            }
+            AnimatedVisibility(Look.saver, enter = fadeIn(tween(900)), exit = fadeOut(tween(300))) {
+                SaverContent(prefs.ssMode)
             }
         }
     }

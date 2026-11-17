@@ -43,6 +43,6 @@ jobs:
         with:
           tag_name: latest
           name: Последняя сборка
-          body: Свежие APK. svoe-tv.apk ставится на телевизор, svoe-phone.apk на телефон.
+          body_path: RELEASE_NOTES.md
           files: dist/*.apk
           make_latest: true

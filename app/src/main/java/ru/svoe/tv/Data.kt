@@ -44,6 +44,12 @@ class Prefs(ctx: Context) {
         set(v) { p.edit().putString("playlist_url", v).apply() }
 
     /** Обои: auto | morning | day | evening | night */
+    var ssMode: String
+        get() = p.getString("ss_mode", "night") ?: "night"
+        set(v) { p.edit().putString("ss_mode", v).apply() }
+    var ssMinutes: Int
+        get() = p.getInt("ss_minutes", 5)
+        set(v) { p.edit().putInt("ss_minutes", v).apply() }
     var wallpaper: String
         get() = p.getString("wallpaper", "auto") ?: "auto"
         set(v) { p.edit().putString("wallpaper", v).apply() }

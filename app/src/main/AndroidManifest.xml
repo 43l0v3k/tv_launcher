@@ -36,6 +36,18 @@
             </intent-filter>
         </activity>
 
+        <!-- Системная заставка: запускается системой поверх любых приложений -->
+        <service
+            android:name=".SaverService"
+            android:exported="true"
+            android:label="Своё ТВ"
+            android:permission="android.permission.BIND_DREAM_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.dreams.DreamService" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </service>
+
         <!-- Нужен только чтобы лаунчер мог читать, что сейчас играет (виджет музыки) -->
         <service
             android:name=".MediaListenerService"

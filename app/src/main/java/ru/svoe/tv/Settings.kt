@@ -34,6 +34,8 @@ import kotlinx.coroutines.launch
 object Look {
     var wallpaper by mutableStateOf("auto")
     var redo by mutableIntStateOf(0)
+    var saver by mutableStateOf(false)
+    var busy by mutableStateOf(false)
 }
 
 @Composable
@@ -68,6 +70,9 @@ fun SettingsScreen(
     var code by remember { mutableStateOf(prefs.pairCode) }
     var region by remember { mutableStateOf(prefs.region) }
     var city by remember { mutableStateOf(prefs.city) }
+    var ssMode by remember { mutableStateOf(prefs.ssMode) }
+    var ssMin by remember { mutableStateOf(prefs.ssMinutes) }
+    var ssMsg by remember { mutableStateOf("") }
     val ver = remember { runCatching { act.packageManager.getPackageInfo(act.packageName, 0).versionName }.getOrNull() ?: "" }
 
     val cats = listOf(
@@ -77,6 +82,7 @@ fun SettingsScreen(
         "weather" to "weather",
         "iptv" to "iptv",
         "widgets" to "widgets",
+        "saver" to "set_saver",
         "look" to "set_look",
         "lock" to "qs_lock",
         "system" to "set_system",
@@ -184,6 +190,38 @@ fun SettingsScreen(
                                 "widgets" -> {
                                     PanelTitle(tr("widgets"))
                                     Btn(tr("widgets_pick")) { sub = "widgets" }
+                                }
+
+                                "saver" -> {
+                                    PanelTitle(tr("set_saver"), tr("ss_sub"))
+                                    listOf(
+                                        "off" to "ss_off",
+                                        "auto" to "ss_auto",
+                                        "day" to "ss_day",
+                                        "evening" to "ss_evening",
+                                        "night" to "ss_night",
+                                    ).forEach { (id, k) ->
+                                        Choice(tr(k), ssMode == id) { ssMode = id; prefs.ssMode = id }
+                                    }
+                                    if (ssMode != "off") {
+                                        Label(tr("ss_time"), 14, FontWeight.SemiBold)
+                                        Row(horizontalArrangement = Arrangement.spacedBy(d(8))) {
+                                            listOf(1, 2, 5, 10, 15, 30).forEach { m ->
+                                                GlassCard(
+                                                    Modifier.weight(1f).height(d(42)),
+                                                    onClick = { ssMin = m; prefs.ssMinutes = m },
+                                                    selected = ssMin == m,
+                                                ) { Label("$m ${tr("ss_min")}", 14, maxLines = 1) }
+                                            }
+                                        }
+                                        Btn(tr("ss_preview")) { Look.saver = true; onClose() }
+                                    }
+                                    Spacer(Modifier.height(d(6)))
+                                    Label(tr("ss_system"), 14, FontWeight.SemiBold)
+                                    Label(tr("ss_system_hint"), 12, color = Muted)
+                                    Btn(tr("ss_system_btn")) { ssMsg = tr("ss_res_" + SystemSaver.install(act, ssMin)) }
+                                    if (ssMsg.isNotEmpty()) Label(ssMsg, 13, color = Good)
+                                    Label(SystemSaver.ADB, 11, color = Muted)
                                 }
 
                                 "look" -> {
