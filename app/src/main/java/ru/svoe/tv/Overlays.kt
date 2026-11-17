@@ -478,6 +478,41 @@ fun PlayerScreen(channels: List<Channel>, start: Int, onClose: () -> Unit) {
 private val ALL_WIDGETS = listOf("fin" to "w_fin", "fx" to "w_fx", "media" to "w_media", "cal" to "w_cal")
 
 @Composable
+fun CityDialog(prefs: Prefs, onClose: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    var q by remember { mutableStateOf(prefs.city) }
+    var status by remember { mutableStateOf("") }
+    val fr = remember { FocusRequester() }
+    LaunchedEffect(Unit) { delay(300); runCatching { fr.requestFocus() } }
+    fun save() {
+        scope.launch {
+            val r = geocode(q.trim())
+            if (r == null) status = tr("city_fail")
+            else {
+                prefs.city = r.first; prefs.lat = r.second; prefs.lon = r.third
+                loadWeather(prefs)
+                onClose()
+            }
+        }
+    }
+    Overlay(onClose) {
+        GlassCard(Modifier.width(d(480)), shape = RoundedCornerShape(d(24))) {
+            Column(Modifier.padding(d(22)), verticalArrangement = Arrangement.spacedBy(d(12))) {
+                Label(tr("city_title"), 20, FontWeight.SemiBold)
+                TextBox(q, { q = it }, Modifier.fillMaxWidth(), "", fr, ImeAction.Done) { save() }
+                if (status.isNotEmpty()) Label(status, 13, color = Bad)
+                Row(horizontalArrangement = Arrangement.spacedBy(d(10))) {
+                    Btn(tr("save"), tint = Accent) { save() }
+                    Btn(tr("cancel")) { onClose() }
+                }
+            }
+        }
+    }
+}
+
+private val ALL_WIDGETS = listOf("fin" to "w_fin", "fx" to "w_fx", "media" to "w_media", "cal" to "w_cal")
+
+@Composable
 fun WidgetsDialog(enabled: List<String>, onChange: (List<String>) -> Unit, onClose: () -> Unit) {
     Overlay(onClose) {
         GlassCard(Modifier.width(d(460)), shape = RoundedCornerShape(d(24))) {
