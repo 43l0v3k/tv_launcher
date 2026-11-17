@@ -23,6 +23,11 @@ jobs:
           set -euo pipefail
           [[ "$FILE" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "bad file name"; exit 1; }
           test -f "tg_posts/$FILE"
+          # секреты часто вставляют с пробелом или переводом строки в конце
+          TG_TOKEN=$(printf '%s' "$TG_TOKEN" | tr -d '[:space:]')
+          TG_CHAT=$(printf '%s' "$TG_CHAT" | tr -d '[:space:]')
+          [ -n "$TG_TOKEN" ] || { echo "TG_TOKEN пустой"; exit 1; }
+          [ -n "$TG_CHAT" ] || { echo "TG_CHAT пустой"; exit 1; }
           curl -sS --fail-with-body "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
             -d chat_id="$TG_CHAT" -d parse_mode=HTML \
             --data-urlencode text@"tg_posts/$FILE" > resp.json || { cat resp.json; exit 1; }
