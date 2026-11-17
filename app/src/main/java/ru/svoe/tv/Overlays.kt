@@ -510,8 +510,6 @@ fun CityDialog(prefs: Prefs, onClose: () -> Unit) {
     }
 }
 
-private val ALL_WIDGETS = listOf("fin" to "w_fin", "fx" to "w_fx", "media" to "w_media", "cal" to "w_cal")
-
 @Composable
 fun WidgetsDialog(enabled: List<String>, onChange: (List<String>) -> Unit, onClose: () -> Unit) {
     Overlay(onClose) {
