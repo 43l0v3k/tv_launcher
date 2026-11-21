@@ -13,8 +13,8 @@ android {
         minSdk = 24
         ndk { abiFilters += listOf("armeabi-v7a", "arm64-v8a") }
         targetSdk = 34
-        versionCode = 4
-        versionName = "0.4"
+        versionCode = 10
+        versionName = "1.0"
     }
     signingConfigs {
         create("shared") {

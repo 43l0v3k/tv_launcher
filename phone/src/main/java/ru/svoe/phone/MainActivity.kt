@@ -23,6 +23,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import org.json.JSONObject
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -74,6 +77,29 @@ private fun Btn(text: String, onClick: () -> Unit) {
     ) { Txt(text, bold = true) }
 }
 
+/** Маленькая кнопка пульта: отправляет команду на ТВ. */
+@Composable
+private fun RowScope.Key(label: String, cmd: String) {
+    Box(
+        Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(CARD)
+            .clickable { Link.send(JSONObject().put("t", "rc").put("k", cmd).toString()) }
+            .padding(vertical = 16.dp),
+        contentAlignment = Alignment.Center
+    ) { Txt(label, bold = true) }
+}
+
+@Composable
+private fun RemotePad() {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Txt("Пульт", color = DIM, size = 14.sp)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { Key("", ""); Key("▲", "up"); Key("", "") }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { Key("◀", "left"); Key("OK", "ok"); Key("▶", "right") }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { Key("Назад", "back"); Key("▼", "down"); Key("Домой", "home") }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { Key("Гр −", "vol_down"); Key("Mute", "mute"); Key("Гр +", "vol_up") }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { Key("⏮", "prev"); Key("⏯", "play"); Key("⏭", "next") }
+    }
+}
+
 @Suppress("DEPRECATION")
 class MainActivity : ComponentActivity() {
     private class Dev(val name: String, val mac: String, val bonded: Boolean)
@@ -85,6 +111,7 @@ class MainActivity : ComponentActivity() {
     private var tvMac by mutableStateOf("")
     private var code by mutableStateOf("")
     private var notifAccess by mutableStateOf(false)
+    private var linkUrl by mutableStateOf("")
     private var missing by mutableStateOf<List<String>>(emptyList())
 
     private var pendingName: String? = null   // ждём разрешений, чтобы искать ТВ по имени
@@ -381,6 +408,26 @@ class MainActivity : ComponentActivity() {
             if (status.isNotBlank()) Txt(status, size = 14.sp)
 
             Txt("ТВ: " + if (tvMac.isBlank()) "не выбран" else "$tvName ($tvMac)")
+
+            if (on) {
+                RemotePad()
+                Txt("Открыть ссылку на ТВ", color = DIM, size = 14.sp)
+                BasicTextField(
+                    value = linkUrl,
+                    onValueChange = { linkUrl = it },
+                    singleLine = true,
+                    textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
+                    cursorBrush = SolidColor(Color.White),
+                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(CARD).padding(14.dp)
+                )
+                Btn("Отправить на ТВ") {
+                    val u = linkUrl.trim()
+                    if (u.startsWith("http://") || u.startsWith("https://")) {
+                        Link.send(JSONObject().put("t", "open").put("url", u).toString())
+                        status = "Ссылка отправлена"
+                    } else status = "Ссылка должна начинаться с http:// или https://"
+                }
+            }
 
             Btn("Включить службу связи") {
                 when {

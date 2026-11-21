@@ -19,7 +19,7 @@ object Net {
         val c = URL(url).openConnection() as HttpURLConnection
         c.connectTimeout = 10_000
         c.readTimeout = 15_000
-        c.setRequestProperty("User-Agent", "SvoeTV/0.3")
+        c.setRequestProperty("User-Agent", "SvoeTV/1.0")
         try {
             return c.inputStream.bufferedReader().use { it.readText() }
         } finally {
@@ -33,18 +33,61 @@ object WeatherData {
     var wind by mutableStateOf<Int?>(null)
     var code by mutableIntStateOf(-1)
     var city by mutableStateOf("")
+    var feels by mutableStateOf<Int?>(null)
+    var rainChance by mutableIntStateOf(-1)
+    /** Прогноз на ближайшие дни */
+    var days by mutableStateOf(emptyList<DayForecast>())
+}
+
+data class DayForecast(val time: Long, val min: Int, val max: Int, val code: Int)
+
+/** Короткий совет по погоде для заставки и главного экрана. Пустая строка — совет не нужен. */
+fun weatherAdvice(): String {
+    val t = WeatherData.temp ?: return ""
+    val rain = WeatherData.rainChance
+    val code = WeatherData.code
+    val wet = rain >= 50 || code in 51..67 || code in 80..82
+    val snow = code in 71..77 || code in 85..86
+    return when {
+        code in 95..99 -> tr("adv_storm")
+        snow -> tr("adv_snow")
+        wet -> tr("adv_umbrella")
+        t <= -10 -> tr("adv_frost")
+        t <= 5 -> tr("adv_cold")
+        t >= 30 -> tr("adv_hot")
+        else -> ""
+    }
 }
 
 /** Погода: open-meteo.com, ключ не нужен. */
 suspend fun loadWeather(prefs: Prefs) = withContext(Dispatchers.IO) {
     runCatching {
         val url = "https://api.open-meteo.com/v1/forecast?latitude=${prefs.lat}&longitude=${prefs.lon}" +
-            "&current=temperature_2m,weather_code,wind_speed_10m&wind_speed_unit=ms"
-        val c = JSONObject(Net.get(url)).getJSONObject("current")
+            "&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m&wind_speed_unit=ms" +
+            "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max" +
+            "&forecast_days=4&timezone=auto"
+        val root = JSONObject(Net.get(url))
+        val c = root.getJSONObject("current")
         WeatherData.temp = Math.round(c.getDouble("temperature_2m")).toInt()
         WeatherData.wind = Math.round(c.getDouble("wind_speed_10m")).toInt()
         WeatherData.code = c.getInt("weather_code")
+        WeatherData.feels = runCatching { Math.round(c.getDouble("apparent_temperature")).toInt() }.getOrNull()
         WeatherData.city = prefs.city
+        runCatching {
+            val d = root.getJSONObject("daily")
+            val codes = d.getJSONArray("weather_code")
+            val mx = d.getJSONArray("temperature_2m_max")
+            val mn = d.getJSONArray("temperature_2m_min")
+            val pr = d.getJSONArray("precipitation_probability_max")
+            val fmt = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+            val list = ArrayList<DayForecast>()
+            for (i in 0 until codes.length()) {
+                val ts = fmt.parse(d.getJSONArray("time").getString(i))?.time ?: 0L
+                list += DayForecast(ts, Math.round(mn.getDouble(i)).toInt(), Math.round(mx.getDouble(i)).toInt(), codes.getInt(i))
+            }
+            WeatherData.days = list
+            WeatherData.rainChance = if (pr.length() > 0 && !pr.isNull(0)) pr.getInt(0) else -1
+        }
     }
 }
 

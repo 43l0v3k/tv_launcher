@@ -137,6 +137,7 @@ object Sync {
                     pmAt = android.os.SystemClock.elapsedRealtime()
                 }
             }
+            "rc", "open" -> main.post { Remote.handle(j) }
             "cal" -> {
                 val arr = j.optJSONArray("events")
                 val list = mutableListOf<CalEvent>()

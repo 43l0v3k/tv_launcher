@@ -50,6 +50,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -236,7 +237,7 @@ fun Home(act: MainActivity, prefs: Prefs) {
                                         when (kind) {
                                             "fin" -> FinCard(m)
                                             "fx" -> FxCard(m)
-                                            "media" -> MediaCard(m, act)
+                                            "media" -> MediaCard(m, act) { overlay = "music" }
                                             "cal" -> CalCard(m)
                                             else -> GlassCard(m, onClick = { overlay = "widgets" }) { Ico("plus", d(28)) }
                                         }
@@ -276,6 +277,7 @@ fun Home(act: MainActivity, prefs: Prefs) {
             "iptv" -> IptvOverlay(channels, { overlay = null }, { playing = it }, { overlay = "playlist" })
             "playlist" -> PlaylistDialog(prefs, { overlay = "iptv" }) { channels = it }
             "city" -> CityDialog(prefs) { overlay = null }
+            "music" -> MusicOverlay { overlay = null }
             "widgets" -> WidgetsDialog(widgets, { widgets = it; prefs.widgets = it }, { overlay = null })
             "panel" -> ControlPanel(
                 act, { overlay = null },
@@ -505,9 +507,10 @@ fun WeatherCard(modifier: Modifier, onClick: () -> Unit) {
                 Label(WeatherData.temp?.let { "$it°" } ?: "—", 30, FontWeight.Light, maxLines = 1)
             }
             val w = WeatherData.wind
+            val adv = weatherAdvice()
             Label(
-                (if (w != null) "${tr("wind")} $w ${tr("ms")} · " else "") + WeatherData.city,
-                10, color = Muted, maxLines = 1,
+                if (adv.isNotEmpty()) adv else (if (w != null) "${tr("wind")} $w ${tr("ms")} · " else "") + WeatherData.city,
+                10, color = if (adv.isNotEmpty()) Color(0xFFFFE08A) else Muted, maxLines = 1,
             )
         }
     }
@@ -593,7 +596,7 @@ fun FxCard(modifier: Modifier) {
 }
 
 @Composable
-fun MediaCard(modifier: Modifier, act: MainActivity) {
+fun MediaCard(modifier: Modifier, act: MainActivity, onOpen: () -> Unit) {
     val has = Media.hasAccess.value
     // играет телефон, а ТВ молчит — показываем телефон
     val phoneSrc = Sync.pmTitle.value.isNotEmpty() && !Media.playing.value &&
@@ -614,7 +617,11 @@ fun MediaCard(modifier: Modifier, act: MainActivity) {
     }
     GlassCard(
         modifier,
-        onClick = if (!has && !phoneSrc) ({ act.open(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }) else null,
+        onClick = when {
+            !has && !phoneSrc -> ({ act.open(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) })
+            !phoneSrc && mTitle.isNotEmpty() -> onOpen
+            else -> null
+        },
     ) {
         if (!has && !phoneSrc) {
             Label(tr("media_grant"), 12, color = Muted, align = TextAlign.Center, modifier = Modifier.padding(d(12)))
@@ -622,9 +629,15 @@ fun MediaCard(modifier: Modifier, act: MainActivity) {
             Label(tr("media_none"), 13, color = Muted, align = TextAlign.Center)
         } else {
             Column(Modifier.fillMaxSize().padding(d(12)), verticalArrangement = Arrangement.SpaceBetween) {
-                Column {
-                    Label(mTitle, 14, FontWeight.SemiBold, maxLines = 1)
-                    Label(mArtist.ifEmpty { " " }, 11, color = Muted, maxLines = 1)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(d(8))) {
+                    val cv = if (phoneSrc) null else Media.cover.value
+                    if (cv != null) {
+                        Image(cv.asImageBitmap(), null, Modifier.size(d(38)).clip(RoundedCornerShape(d(6))))
+                    }
+                    Column(Modifier.weight(1f)) {
+                        Label(mTitle, 14, FontWeight.SemiBold, maxLines = 1)
+                        Label(mArtist.ifEmpty { " " }, 11, color = Muted, maxLines = 1)
+                    }
                 }
                 val dur = mDur
                 Box(Modifier.fillMaxWidth().height(d(4)).background(Color(0x33FFFFFF), RoundedCornerShape(50))) {

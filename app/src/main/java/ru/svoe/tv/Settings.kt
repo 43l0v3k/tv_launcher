@@ -73,12 +73,14 @@ fun SettingsScreen(
     var ssMode by remember { mutableStateOf(prefs.ssMode) }
     var ssMin by remember { mutableStateOf(prefs.ssMinutes) }
     var ssMsg by remember { mutableStateOf("") }
+    var remoteOn by remember { mutableStateOf(prefs.remoteOn) }
     val ver = remember { runCatching { act.packageManager.getPackageInfo(act.packageName, 0).versionName }.getOrNull() ?: "" }
 
     val cats = listOf(
         "lang" to "lang_title",
         "region" to "region_title",
         "phone" to "set_phone",
+        "remote" to "set_remote",
         "weather" to "weather",
         "iptv" to "iptv",
         "widgets" to "widgets",
@@ -173,6 +175,12 @@ fun SettingsScreen(
                                             Sync.start(prefs.pairCode)
                                         }
                                     }
+                                }
+
+                                "remote" -> {
+                                    PanelTitle(tr("set_remote"))
+                                    Label(tr("remote_hint"), 13, color = Muted)
+                                    Choice(tr("remote_on"), remoteOn) { remoteOn = !remoteOn; prefs.remoteOn = remoteOn }
                                 }
 
                                 "weather" -> {

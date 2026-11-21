@@ -93,6 +93,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         prefs = Prefs(this)
+        Remote.init(this, prefs)
+        Remote.activity = this
         L.lang = prefs.lang
         Look.wallpaper = prefs.wallpaper
         locked.value = prefs.hasPin && prefs.onboarded
@@ -126,6 +128,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         runCatching { unregisterReceiver(screenOff) }
+        if (Remote.activity === this) Remote.activity = null
         super.onDestroy()
     }
 }
@@ -220,7 +223,7 @@ fun Root(act: MainActivity, prefs: Prefs) {
                 }
             }
             AnimatedVisibility(Look.saver, enter = fadeIn(tween(900)), exit = fadeOut(tween(300))) {
-                SaverContent(prefs.ssMode)
+                SaverContent(prefs.ssMode, prefs)
             }
         }
     }
