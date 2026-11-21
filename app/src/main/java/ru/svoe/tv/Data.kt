@@ -69,6 +69,11 @@ class Prefs(ctx: Context) {
         get() = p.getBoolean("onboarded", false)
         set(v) { p.edit().putBoolean("onboarded", v).apply() }
 
+    /** Можно ли управлять ТВ с привязанного телефона */
+    var remoteOn: Boolean
+        get() = p.getBoolean("remote_on", true)
+        set(v) { p.edit().putBoolean("remote_on", v).apply() }
+
     var lang: String
         get() = p.getString("lang", "ru") ?: "ru"
         set(v) { p.edit().putString("lang", v).apply() }

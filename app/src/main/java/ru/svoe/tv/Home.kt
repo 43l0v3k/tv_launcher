@@ -505,9 +505,10 @@ fun WeatherCard(modifier: Modifier, onClick: () -> Unit) {
                 Label(WeatherData.temp?.let { "$it°" } ?: "—", 30, FontWeight.Light, maxLines = 1)
             }
             val w = WeatherData.wind
+            val adv = weatherAdvice()
             Label(
-                (if (w != null) "${tr("wind")} $w ${tr("ms")} · " else "") + WeatherData.city,
-                10, color = Muted, maxLines = 1,
+                if (adv.isNotEmpty()) adv else (if (w != null) "${tr("wind")} $w ${tr("ms")} · " else "") + WeatherData.city,
+                10, color = if (adv.isNotEmpty()) Color(0xFFFFE08A) else Muted, maxLines = 1,
             )
         }
     }

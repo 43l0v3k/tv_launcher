@@ -8,13 +8,19 @@ import android.service.dreams.DreamService
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -50,11 +56,18 @@ fun saverHour(mode: String, now: Int): Int = when (mode) {
 
 /** Сама заставка: обои выбранного времени суток и большие часы. Больше ничего. */
 @Composable
-fun SaverContent(mode: String) {
+fun SaverContent(mode: String, prefs: Prefs) {
     val hour by produceState(Calendar.getInstance().get(Calendar.HOUR_OF_DAY)) {
         while (true) {
             value = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
             delay(60_000)
+        }
+    }
+    // Погода обновляется, пока идёт заставка (в системной заставке лаунчер может быть не открыт)
+    LaunchedEffect(Unit) {
+        while (true) {
+            loadWeather(prefs)
+            delay(15 * 60_000L)
         }
     }
     BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black)) {
@@ -62,6 +75,50 @@ fun SaverContent(mode: String) {
         CompositionLocalProvider(LocalScale provides scale) {
             Wallpaper(saverHour(mode, hour))
             SaverClock()
+            SaverWeather()
+        }
+    }
+}
+
+/** Погода справа внизу: сейчас, как ощущается, совет и прогноз на три дня. */
+@Composable
+private fun SaverWeather() {
+    val temp = WeatherData.temp
+    if (temp == null) return
+    val now = System.currentTimeMillis()
+    val step = (now / 180_000L % 4).toInt()
+    val ox by animateDpAsState(d(listOf(0, -40, -10, -60)[step]), tween(4000), label = "wx")
+    val oy by animateDpAsState(d(listOf(0, 20, -30, -10)[step]), tween(4000), label = "wy")
+    val advice = weatherAdvice()
+    Box(Modifier.fillMaxSize()) {
+        Column(
+            Modifier.align(Alignment.BottomEnd).padding(end = d(56), bottom = d(48)).offset(ox, oy),
+            horizontalAlignment = Alignment.End,
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(d(14))) {
+                Ico(weatherIcon(WeatherData.code), d(56), Color(0xFFFFE08A))
+                Label("$temp°", 72, FontWeight.Light, maxLines = 1)
+            }
+            Label(WeatherData.city, 20, color = Muted, maxLines = 1, align = TextAlign.End)
+            val f = WeatherData.feels
+            if (f != null) Label("${tr("feels")} $f°", 16, color = Muted, maxLines = 1, align = TextAlign.End)
+            if (advice.isNotEmpty()) {
+                Spacer(Modifier.height(d(8)))
+                Label(advice, 18, FontWeight.SemiBold, color = Color(0xFFFFE08A), maxLines = 2, align = TextAlign.End)
+            }
+            val days = WeatherData.days.drop(1).take(3)
+            if (days.isNotEmpty()) {
+                Spacer(Modifier.height(d(14)))
+                Row(horizontalArrangement = Arrangement.spacedBy(d(22))) {
+                    days.forEach { dd ->
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Label(SimpleDateFormat("EEE", Locale(L.lang)).format(Date(dd.time)), 14, color = Muted, maxLines = 1)
+                            Ico(weatherIcon(dd.code), d(26), TextC)
+                            Label("${dd.max}° / ${dd.min}°", 14, maxLines = 1)
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -111,7 +168,7 @@ class SaverService : DreamService(), LifecycleOwner, SavedStateRegistryOwner {
         window.decorView.setViewTreeLifecycleOwner(this)
         window.decorView.setViewTreeSavedStateRegistryOwner(this)
         val mode = prefs.ssMode.let { if (it == "off") "night" else it }
-        setContentView(ComposeView(this).apply { setContent { SaverContent(mode) } })
+        setContentView(ComposeView(this).apply { setContent { SaverContent(mode, prefs) } })
         lc.currentState = Lifecycle.State.RESUMED
     }
 
