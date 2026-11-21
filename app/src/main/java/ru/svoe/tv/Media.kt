@@ -2,6 +2,7 @@ package ru.svoe.tv
 
 import android.content.ComponentName
 import android.content.Context
+import android.graphics.Bitmap
 import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
@@ -22,6 +23,7 @@ object Media {
     val artist = mutableStateOf("")
     val playing = mutableStateOf(false)
     val duration = mutableLongStateOf(0L)
+    val cover = mutableStateOf<Bitmap?>(null)
     private val basePos = mutableLongStateOf(0L)
     private var baseTime = 0L
     private var speed = 1f
@@ -69,7 +71,7 @@ object Media {
     private fun detach() {
         runCatching { ctrl?.unregisterCallback(cb) }
         ctrl = null
-        title.value = ""; artist.value = ""; playing.value = false; duration.longValue = 0L
+        title.value = ""; artist.value = ""; playing.value = false; duration.longValue = 0L; cover.value = null
     }
 
     private fun applyMeta(m: MediaMetadata?) {
@@ -77,6 +79,9 @@ object Media {
         artist.value = m?.getString(MediaMetadata.METADATA_KEY_ARTIST)
             ?: m?.getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST) ?: ""
         duration.longValue = m?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L
+        cover.value = m?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
+            ?: m?.getBitmap(MediaMetadata.METADATA_KEY_ART)
+            ?: m?.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
     }
 
     private fun applyState(s: PlaybackState?) {
@@ -95,4 +100,11 @@ object Media {
     fun toggle() { ctrl?.transportControls?.let { if (playing.value) it.pause() else it.play() } }
     fun next() { ctrl?.transportControls?.skipToNext() }
     fun prev() { ctrl?.transportControls?.skipToPrevious() }
+
+    /** Перемотка на delta мс (отрицательное — назад). */
+    fun seekBy(delta: Long) {
+        val d = duration.longValue
+        val to = (position() + delta).coerceAtLeast(0L).let { if (d > 0) it.coerceAtMost(d) else it }
+        ctrl?.transportControls?.seekTo(to)
+    }
 }
